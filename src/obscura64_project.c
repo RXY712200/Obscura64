@@ -330,11 +330,12 @@ obscura64_status obscura64_project_open_internal(
         state.profile, OBSCURA64_PROFILE_SIZE, provider, out_context);
 }
 
-/* Preserve the given newest-first order; the generic history parser stays strict.
- * Only entry 0 may overlap current after a prior current-commit failure. */
+/* Managed-set validation precedes this builder. Keep newest-first order and
+ * include a validated current/history overlap only once. */
 static obscura64_status build_force_history(
     const obscura64_project_state *current,
     const obscura64_project_history *existing,
+    obscura64_managed_state_kind kind,
     obscura64_project_history *result)
 {
     obscura64_project_history temporary;
@@ -345,14 +346,8 @@ static obscura64_status build_force_history(
     temporary.entries[0].generation = current->generation;
     memcpy(temporary.entries[0].profile, current->profile, OBSCURA64_PROFILE_SIZE);
     if (existing != NULL) {
-        for (i = 0; i < existing->count; ++i) {
+        for (i = kind == OBSCURA64_MANAGED_OVERLAP ? 1U : 0U; i < existing->count; ++i) {
             const obscura64_history_entry *entry = &existing->entries[i];
-            if (entry->generation > current->generation) return OBSCURA64_STATE_CORRUPT;
-            if (entry->generation == current->generation) {
-                if (i != 0 || memcmp(entry->profile, current->profile, OBSCURA64_PROFILE_SIZE) != 0)
-                    return OBSCURA64_STATE_CORRUPT;
-                continue;
-            }
             if (temporary.count < OBSCURA64_HISTORY_CAPACITY)
                 temporary.entries[temporary.count++] = *entry;
         }
@@ -381,6 +376,7 @@ static obscura64_status force_reinitialize_internal(
     DWORD attributes;
     obscura64_status status;
     obscura64_core_status core_status;
+    obscura64_managed_state_kind managed_kind;
 
     if (out_context == NULL) return OBSCURA64_INVALID_ARGUMENT;
     *out_context = NULL;
@@ -421,14 +417,15 @@ static obscura64_status force_reinitialize_internal(
     status = obscura64_persistence_read_verified(history_path, old_history_bytes,
         OBSCURA64_HISTORY_V1_SIZE, verify_history, &old_history);
     if (status == OBSCURA64_OK) {
-        if (memcmp(old_history.project_id, old_state.project_id, OBSCURA64_PROJECT_ID_SIZE) != 0) {
-            status = OBSCURA64_STATE_CORRUPT; goto cleanup;
-        }
         history_exists = 1;
     } else if (status != OBSCURA64_STATE_MISSING) {
         goto cleanup;
     }
-    status = build_force_history(&old_state, history_exists ? &old_history : NULL, &new_history);
+    status = obscura64_managed_state_validate(&old_state,
+        history_exists ? &old_history : NULL, &managed_kind);
+    if (status != OBSCURA64_OK) goto cleanup;
+    status = build_force_history(&old_state, history_exists ? &old_history : NULL,
+        managed_kind, &new_history);
     if (status != OBSCURA64_OK) goto cleanup;
     core_status = obscura64_history_serialize(&new_history, history_bytes);
     if (core_status != OBSCURA64_CORE_STATUS_SUCCESS) { status = OBSCURA64_IO_ERROR; goto cleanup; }

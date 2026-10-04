@@ -20,6 +20,7 @@ add_library(obscura64 STATIC
     src/obscura64_project.c
     src/obscura64_history.c
     src/obscura64_persistence.c
+    src/obscura64_managed_state.c
 )
 
 target_include_directories(obscura64
@@ -258,3 +259,11 @@ if(MSVC)
     target_compile_options(obscura64_test_persistence PRIVATE /W4)
 endif()
 add_test(NAME obscura64_persistence COMMAND obscura64_test_persistence)
+
+add_executable(obscura64_test_managed_state tests/test_obscura64_managed_state.c)
+target_include_directories(obscura64_test_managed_state PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(obscura64_test_managed_state PRIVATE obscura64)
+if(MSVC)
+    target_compile_options(obscura64_test_managed_state PRIVATE /W4)
+endif()
+add_test(NAME obscura64_managed_state COMMAND obscura64_test_managed_state)

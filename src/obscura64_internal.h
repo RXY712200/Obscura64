@@ -75,6 +75,18 @@ typedef struct obscura64_project_history {
     obscura64_history_entry entries[OBSCURA64_HISTORY_CAPACITY];
 } obscura64_project_history;
 
+/* Force-only cross-file validation. NULL history means the file is absent.
+ * Does not read, mutate, repair or recover either authoritative file.
+ * Optional kind is published only on success. */
+typedef enum obscura64_managed_state_kind {
+    OBSCURA64_MANAGED_STEADY,
+    OBSCURA64_MANAGED_OVERLAP
+} obscura64_managed_state_kind;
+obscura64_status obscura64_managed_state_validate(
+    const obscura64_project_state *current,
+    const obscura64_project_history *history,
+    obscura64_managed_state_kind *kind);
+
 int obscura64_history_validate(const obscura64_project_history *history);
 obscura64_core_status obscura64_history_serialize(
     const obscura64_project_history *history,

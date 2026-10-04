@@ -221,14 +221,16 @@ static int test_history_relationships(const char *path_utf8)
         "canonical generation five fixture");
     memset(&history, 0, sizeof(history));
     memcpy(history.project_id, state.project_id, 16);
-    history.count = 2;
+    history.count = 3;
     history.entries[0].generation = 5;
     memcpy(history.entries[0].profile, state.profile, 64);
     history.entries[1].generation = 4;
     memcpy(history.entries[1].profile, obscura64_profiles_v1[1], 64);
+    history.entries[2].generation = 3;
+    memcpy(history.entries[2].profile, obscura64_profiles_v1[2], 64);
     RCHECK(obscura64_history_serialize(&history, blob) == OBSCURA64_CORE_STATUS_SUCCESS &&
         file_bytes(current_path, current_blob, 160, 1) && file_bytes(history_path, blob, 336, 1),
-        "synthetic Stage 4.3 current/history overlap fixture");
+        "complete safe current/history overlap fixture");
     RCHECK(obscura64_force_reinitialize(path_utf8, &context) == OBSCURA64_OK, "overlap Force succeeds");
     obscura64_context_destroy(context); context = NULL;
     RCHECK(file_bytes(current_path, current_after, 160, 0) &&
@@ -237,9 +239,11 @@ static int test_history_relationships(const char *path_utf8)
         "overlap normalization advances generation five to six");
     RCHECK(file_bytes(history_path, after, 336, 0) &&
         obscura64_history_deserialize(after, 336, &parsed) == OBSCURA64_CORE_STATUS_SUCCESS &&
-        parsed.count == 2 && parsed.entries[0].generation == 5 && parsed.entries[1].generation == 4 &&
+        parsed.count == 3 && parsed.entries[0].generation == 5 && parsed.entries[1].generation == 4 &&
+        parsed.entries[2].generation == 3 &&
         memcmp(parsed.entries[0].profile, history.entries[0].profile, 64) == 0 &&
-        memcmp(parsed.entries[1].profile, history.entries[1].profile, 64) == 0,
+        memcmp(parsed.entries[1].profile, history.entries[1].profile, 64) == 0 &&
+        memcmp(parsed.entries[2].profile, history.entries[2].profile, 64) == 0,
         "synthetic overlap retained once with complete correct Profiles");
 
     for (variant = 0; variant < 4; ++variant) {
@@ -268,15 +272,16 @@ static int test_history_relationships(const char *path_utf8)
     memset(&history, 0, sizeof(history)); memcpy(history.project_id, state.project_id, 16);
     RCHECK(obscura64_history_serialize(&history, blob) == OBSCURA64_CORE_STATUS_SUCCESS &&
         file_bytes(current_path, current_blob, 160, 1) && file_bytes(history_path, blob, 336, 1), "existing count zero fixture");
-    RCHECK(obscura64_force_reinitialize(path_utf8, &context) == OBSCURA64_OK, "count zero rolls to one");
-    obscura64_context_destroy(context); context = NULL;
-    RCHECK(file_bytes(history_path, after, 336, 0) && obscura64_history_deserialize(after, 336, &parsed) == OBSCURA64_CORE_STATUS_SUCCESS &&
-        parsed.count == 1 && parsed.entries[0].generation == 5 && memcmp(parsed.entries[0].profile, state.profile, 64) == 0,
-        "count zero retains only old current");
+    RCHECK(obscura64_force_reinitialize(path_utf8, &context) == OBSCURA64_STATE_CORRUPT && context == NULL,
+        "generation five with empty history rejected");
+    RCHECK(file_bytes(history_path, after, 336, 0) && memcmp(blob, after, 336) == 0 &&
+        file_bytes(current_path, current_after, 160, 0) && memcmp(current_blob, current_after, 160) == 0,
+        "empty history rejection leaves both files unchanged");
 
-    history.count = 2;
+    history.count = 3;
     history.entries[0].generation = 4; memcpy(history.entries[0].profile, obscura64_profiles_v1[1], 64);
     history.entries[1].generation = 3; memcpy(history.entries[1].profile, state.profile, 64);
+    history.entries[2].generation = 2; memcpy(history.entries[2].profile, obscura64_profiles_v1[2], 64);
     RCHECK(obscura64_history_serialize(&history, blob) == OBSCURA64_CORE_STATUS_SUCCESS &&
         file_bytes(current_path, current_blob, 160, 1) && file_bytes(history_path, blob, 336, 1),
         "nonadjacent generations repeat Profile fixture");
