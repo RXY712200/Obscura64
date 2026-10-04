@@ -1,0 +1,125 @@
+#ifndef OBSCURA64_INTERNAL_H
+#define OBSCURA64_INTERNAL_H
+
+#include "obscura64.h"
+
+#include <stddef.h>
+#include <stdint.h>
+
+#define OBSCURA64_ALPHABET_SIZE OBSCURA64_PROFILE_SIZE
+#define OBSCURA64_REVERSE_INVALID UINT8_C(0xFF)
+
+#ifndef OBSCURA64_DEFAULT_PROVIDER_SYMBOL
+#define OBSCURA64_DEFAULT_PROVIDER_SYMBOL obscura64_builtin_provider_instance
+#endif
+
+extern const obscura64_provider OBSCURA64_DEFAULT_PROVIDER_SYMBOL;
+
+struct obscura64_context {
+    char profile[OBSCURA64_ALPHABET_SIZE];
+    obscura64_provider provider;
+};
+
+typedef enum obscura64_core_status {
+    OBSCURA64_CORE_STATUS_SUCCESS = 0,
+    OBSCURA64_CORE_STATUS_INVALID_ARGUMENT,
+    OBSCURA64_CORE_STATUS_INVALID_PROFILE,
+    OBSCURA64_CORE_STATUS_INVALID_DATA,
+    OBSCURA64_CORE_STATUS_BUFFER_TOO_SMALL,
+    OBSCURA64_CORE_STATUS_SIZE_OVERFLOW,
+    OBSCURA64_CORE_STATUS_RNG_FAILURE,
+    OBSCURA64_CORE_STATUS_CRYPTO_FAILURE
+} obscura64_core_status;
+
+#define OBSCURA64_PROJECT_ID_SIZE 16U
+#define OBSCURA64_STATE_V1_SIZE 160U
+#define OBSCURA64_STATE_V1_HEADER_SIZE 64U
+#define OBSCURA64_STATE_V1_HASH_OFFSET 128U
+
+typedef struct obscura64_project_state {
+    uint8_t project_id[OBSCURA64_PROJECT_ID_SIZE];
+    uint64_t generation;
+    char profile[OBSCURA64_PROFILE_SIZE];
+} obscura64_project_state;
+
+#define OBSCURA64_HISTORY_V1_SIZE 336U
+#define OBSCURA64_HISTORY_CAPACITY 3U
+#define OBSCURA64_HISTORY_ENTRY_SIZE 80U
+#define OBSCURA64_HISTORY_HASH_OFFSET 304U
+
+typedef struct obscura64_history_entry {
+    uint64_t generation;
+    char profile[OBSCURA64_PROFILE_SIZE];
+} obscura64_history_entry;
+
+typedef struct obscura64_project_history {
+    uint8_t project_id[OBSCURA64_PROJECT_ID_SIZE];
+    uint16_t count;
+    obscura64_history_entry entries[OBSCURA64_HISTORY_CAPACITY];
+} obscura64_project_history;
+
+int obscura64_history_validate(const obscura64_project_history *history);
+obscura64_core_status obscura64_history_serialize(
+    const obscura64_project_history *history,
+    unsigned char output[OBSCURA64_HISTORY_V1_SIZE]);
+obscura64_core_status obscura64_history_deserialize(
+    const unsigned char *data, size_t length,
+    obscura64_project_history *history);
+
+extern const char obscura64_v1_character_pool[OBSCURA64_ALPHABET_SIZE + 1];
+
+int obscura64_profile_is_valid(const char *profile, size_t length);
+int obscura64_profile_build_reverse_map(
+    const char *profile,
+    size_t length,
+    uint8_t reverse_map[256]);
+
+obscura64_core_status obscura64_codec_encoded_size(size_t input_len, size_t *output_len);
+obscura64_core_status obscura64_codec_decoded_size(
+    const char *input,
+    size_t input_len,
+    const char *profile,
+    size_t profile_len,
+    size_t *output_len);
+obscura64_core_status obscura64_codec_encode(
+    const uint8_t *input,
+    size_t input_len,
+    const char *profile,
+    size_t profile_len,
+    char *output,
+    size_t output_capacity,
+    size_t *output_len);
+obscura64_core_status obscura64_codec_decode(
+    const char *input,
+    size_t input_len,
+    const char *profile,
+    size_t profile_len,
+    uint8_t *output,
+    size_t output_capacity,
+    size_t *output_len);
+
+obscura64_core_status obscura64_profile_library_get(
+    uint16_t profile_id,
+    uint8_t profile_out[OBSCURA64_ALPHABET_SIZE]);
+int obscura64_profile_library_find(
+    const unsigned char profile[OBSCURA64_PROFILE_SIZE],
+    uint16_t *profile_id);
+obscura64_core_status obscura64_profile_runtime_select_random(
+    uint16_t *profile_id,
+    uint8_t profile_out[OBSCURA64_ALPHABET_SIZE]);
+
+int obscura64_state_validate(const obscura64_project_state *state);
+obscura64_core_status obscura64_state_serialize(
+    const obscura64_project_state *state,
+    unsigned char output[OBSCURA64_STATE_V1_SIZE]);
+obscura64_core_status obscura64_state_deserialize(
+    const unsigned char *data,
+    size_t data_len,
+    obscura64_project_state *out_state);
+
+obscura64_status obscura64_project_open_internal(
+    const char *project_path_utf8,
+    const obscura64_provider *provider,
+    obscura64_context **out_context);
+
+#endif /* OBSCURA64_INTERNAL_H */

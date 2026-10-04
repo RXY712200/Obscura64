@@ -1,0 +1,53 @@
+# Local builds and CMake state
+/build/
+/build-*/
+/cmake-build-*/
+/out/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+/Testing/
+compile_commands.json
+
+# Windows/C compiler and linker products
+*.o
+*.obj
+*.exe
+*.dll
+*.lib
+*.a
+*.pdb
+*.ilk
+*.exp
+*.idb
+*.pch
+*.gch
+*.res
+*.d
+*.log
+*.tmp
+
+# IDE/user files and caches
+.vs/
+.idea/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.opensdf
+*.sdf
+*.ipch
+__pycache__/
+*.pyc
+.cache/
+Thumbs.db
+Desktop.ini
+
+# Local development scratch directories and project-managed runtime state
+/outputs/
+/work/
+.obscura64/
+
+# Frozen artifacts in generated/ are intentionally tracked, including .bin.
