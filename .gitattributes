@@ -1,0 +1,12 @@
+* text=auto
+
+*.c text eol=lf
+*.h text eol=lf
+*.md text eol=lf
+CMakeLists.txt text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+LICENSE text eol=lf
+
+generated/obscura64_profiles_v1_candidate.txt -text
+generated/obscura64_profiles_v1.bin binary
