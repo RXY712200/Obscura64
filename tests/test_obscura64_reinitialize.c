@@ -290,6 +290,16 @@ static int test_history_relationships(const char *path_utf8)
     return 0;
 }
 
+static int no_replacement_temps(const WCHAR *project, const WCHAR *pattern_suffix)
+{
+    WCHAR pattern[MAX_PATH * 2];
+    WIN32_FIND_DATAW entry;
+    HANDLE search;
+    if (!filename(pattern, project, pattern_suffix)) return 0;
+    search = FindFirstFileW(pattern, &entry);
+    if (search != INVALID_HANDLE_VALUE) { FindClose(search); return 0; }
+    return GetLastError() == ERROR_FILE_NOT_FOUND;
+}
 static int test_force(void)
 {
     WCHAR temp[MAX_PATH], unique[MAX_PATH], current_path[MAX_PATH * 2], history_path[MAX_PATH * 2];
@@ -422,8 +432,7 @@ static int test_force(void)
         file_bytes(history_path, history_blob, 336, 0) && memcmp(saved_history, history_blob, 336) == 0,
         "history write failure leaves current and prior history untouched");
     RCHECK(GetFileAttributesW(lock_path) == INVALID_FILE_ATTRIBUTES, "history failure releases lock");
-    RCHECK(filename(extra_path, projects[0], L"\\.obscura64\\history.state.tmp") &&
-        GetFileAttributesW(extra_path) == INVALID_FILE_ATTRIBUTES, "failed history temp cleaned");
+    RCHECK(no_replacement_temps(projects[0], L"\\.obscura64\\history.state.tmp.*"), "failed history temp cleaned");
 
     held = CreateFileW(current_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     RCHECK(held != INVALID_HANDLE_VALUE, "hold current without delete sharing");
@@ -436,8 +445,7 @@ static int test_force(void)
         history.entries[0].generation == state.generation && memcmp(history.entries[0].profile, state.profile, 64) == 0,
         "history first: old Profile retained when current replacement fails");
     RCHECK(GetFileAttributesW(lock_path) == INVALID_FILE_ATTRIBUTES, "current failure releases lock");
-    RCHECK(filename(extra_path, projects[0], L"\\.obscura64\\current.state.tmp") &&
-        GetFileAttributesW(extra_path) == INVALID_FILE_ATTRIBUTES, "failed current temp cleaned");
+    RCHECK(no_replacement_temps(projects[0], L"\\.obscura64\\current.state.tmp.*"), "failed current temp cleaned");
 
     memcpy(saved_history, history_blob, 336);
     RCHECK(obscura64_force_reinitialize(utf8[0], &new_context) == OBSCURA64_OK,

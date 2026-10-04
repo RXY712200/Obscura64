@@ -19,6 +19,7 @@ add_library(obscura64 STATIC
     src/obscura64_state.c
     src/obscura64_project.c
     src/obscura64_history.c
+    src/obscura64_persistence.c
 )
 
 target_include_directories(obscura64
@@ -249,3 +250,11 @@ if(MSVC)
     target_compile_options(obscura64_test_reinitialize PRIVATE /W4)
 endif()
 add_test(NAME obscura64_reinitialize COMMAND obscura64_test_reinitialize)
+
+add_executable(obscura64_test_persistence tests/test_obscura64_persistence.c)
+target_include_directories(obscura64_test_persistence PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(obscura64_test_persistence PRIVATE obscura64)
+if(MSVC)
+    target_compile_options(obscura64_test_persistence PRIVATE /W4)
+endif()
+add_test(NAME obscura64_persistence COMMAND obscura64_test_persistence)

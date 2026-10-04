@@ -5,6 +5,23 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <wchar.h>
+
+/* Windows-private byte persistence; verifiers own format semantics. */
+typedef obscura64_status (*obscura64_persistence_verify_fn)(
+    const unsigned char *data, size_t length, void *user_data);
+obscura64_status obscura64_persistence_read_verified(
+    const wchar_t *path, unsigned char *output, size_t expected_size,
+    obscura64_persistence_verify_fn verify, void *user_data);
+/* BUSY means CREATE_NEW lost the race; the existing file is untouched. */
+obscura64_status obscura64_persistence_create_new_verified(
+    const wchar_t *path, const unsigned char *data, size_t size,
+    obscura64_persistence_verify_fn verify, void *user_data);
+/* Optional old_data preserves the prior best-effort post-rename rollback. */
+obscura64_status obscura64_persistence_replace_verified(
+    const wchar_t *path, const unsigned char *data, size_t size,
+    obscura64_persistence_verify_fn verify, void *user_data,
+    const unsigned char *old_data);
 
 #define OBSCURA64_ALPHABET_SIZE OBSCURA64_PROFILE_SIZE
 #define OBSCURA64_REVERSE_INVALID UINT8_C(0xFF)

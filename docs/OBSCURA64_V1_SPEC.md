@@ -361,3 +361,13 @@ The fixed V1 major stages are:
 8. **Stage 7 — disaster recovery, full testing and release**
 
 V1 is fixed at these eight major stages. Do not continue adding Stage 8, 9, 10, and so on indefinitely unless a genuine structural error is found. If a new need arises later, prefer V2 rather than indefinitely expanding V1.
+
+### Stage 5.1 verified byte persistence
+
+State V1 (160 bytes) and History V1 (336 bytes) formats remain unchanged. The private persistence module owns Wide Win32 byte I/O; serialization and semantic checks remain in the State/History modules via private verifier callbacks.
+
+Replacement sequence: unique same-directory temp with BCrypt suffix and CREATE_NEW -> exact write with partial-write loop -> FlushFileBuffers -> close -> reopen and verify exact size/bytes and format -> MoveFileExW with MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH -> final reopen and verify. Existing authoritative files are never intentionally truncated or rewritten in place. Only temps created by this invocation are removed; unrelated and stale temp-like files are preserved. Post-replacement failure is reported, with the prior best-effort restoration protection retained.
+
+First initialization still creates the authoritative file with CREATE_NEW, then writes, flushes, closes and verifies it. A losing initializer reads the winning state using the existing bounded retry behavior; it never overwrites the winner. Force still commits verified history before preparing/replacing current and retains the previous Profile on current replacement failure.
+
+This improves write/replacement reliability but does not prove absolute power-loss durability under every filesystem, device or controller failure. The existing Force operation.lock is unchanged. Full multi-process locking belongs to Stage 5.3; crash/fault simulations belong to Stage 5.4. No automatic recovery is added; that remains Stage 6 work.

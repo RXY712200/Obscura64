@@ -52,3 +52,13 @@ Existing contexts retain their old Profile. After Force, callers should destroy 
 Force uses a minimal CREATE_NEW `operation.lock` and basic temp-write, flush, reread, replace, final-reread persistence. This does not implement Stage 5's complete locking or crash hardening. History is not currently an automatic recovery source.
 
 No project state file, project path, temporary file, or file replacement is implemented in Stage 4.1. Durable and atomic persistence is deferred to later stages.
+
+### Stage 5.1 verified byte persistence
+
+State V1 (160 bytes) and History V1 (336 bytes) formats remain unchanged. The private persistence module owns Wide Win32 byte I/O; serialization and semantic checks remain in the State/History modules via private verifier callbacks.
+
+Replacement sequence: unique same-directory temp with BCrypt suffix and CREATE_NEW -> exact write with partial-write loop -> FlushFileBuffers -> close -> reopen and verify exact size/bytes and format -> MoveFileExW with MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH -> final reopen and verify. Existing authoritative files are never intentionally truncated or rewritten in place. Only temps created by this invocation are removed; unrelated and stale temp-like files are preserved. Post-replacement failure is reported, with the prior best-effort restoration protection retained.
+
+First initialization still creates the authoritative file with CREATE_NEW, then writes, flushes, closes and verifies it. A losing initializer reads the winning state using the existing bounded retry behavior; it never overwrites the winner. Force still commits verified history before preparing/replacing current and retains the previous Profile on current replacement failure.
+
+This improves write/replacement reliability but does not prove absolute power-loss durability under every filesystem, device or controller failure. The existing Force operation.lock is unchanged. Full multi-process locking belongs to Stage 5.3; crash/fault simulations belong to Stage 5.4. No automatic recovery is added; that remains Stage 6 work.

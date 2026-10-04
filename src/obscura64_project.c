@@ -79,69 +79,33 @@ static WCHAR *append_component(const WCHAR *base, const WCHAR *component)
     return joined;
 }
 
-static obscura64_status read_state_file(
-    const WCHAR *state_path,
-    obscura64_project_state *state)
+static obscura64_status verify_state(
+    const unsigned char *data, size_t size, void *user_data)
 {
-    DWORD attributes = GetFileAttributesW(state_path);
-    HANDLE file;
-    LARGE_INTEGER file_size;
+    obscura64_project_state state;
+    obscura64_core_status parsed = obscura64_state_deserialize(data, size, &state);
+    if (parsed != OBSCURA64_CORE_STATUS_SUCCESS)
+        return parsed == OBSCURA64_CORE_STATUS_CRYPTO_FAILURE ? OBSCURA64_IO_ERROR : OBSCURA64_STATE_CORRUPT;
+    if (user_data != NULL) *(obscura64_project_state *)user_data = state;
+    return OBSCURA64_OK;
+}
+
+static obscura64_status verify_history(
+    const unsigned char *data, size_t size, void *user_data)
+{
+    obscura64_project_history history;
+    obscura64_core_status parsed = obscura64_history_deserialize(data, size, &history);
+    if (parsed != OBSCURA64_CORE_STATUS_SUCCESS)
+        return parsed == OBSCURA64_CORE_STATUS_CRYPTO_FAILURE ? OBSCURA64_IO_ERROR : OBSCURA64_STATE_CORRUPT;
+    if (user_data != NULL) *(obscura64_project_history *)user_data = history;
+    return OBSCURA64_OK;
+}
+
+static obscura64_status read_state_file(
+    const WCHAR *state_path, obscura64_project_state *state)
+{
     unsigned char bytes[OBSCURA64_STATE_V1_SIZE];
-    DWORD bytes_read = 0;
-    DWORD extra_read = 0;
-    unsigned char extra;
-    obscura64_core_status parse_status;
-
-    if (attributes == INVALID_FILE_ATTRIBUTES) {
-        return is_path_not_found_error(GetLastError()) ?
-            OBSCURA64_STATE_MISSING : OBSCURA64_IO_ERROR;
-    }
-    if ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
-        return OBSCURA64_STATE_CORRUPT;
-    }
-
-    file = CreateFileW(state_path, GENERIC_READ,
-                       FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                       NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (file == INVALID_HANDLE_VALUE) {
-        const DWORD error = GetLastError();
-        return is_path_not_found_error(error) ?
-            OBSCURA64_STATE_MISSING : OBSCURA64_IO_ERROR;
-    }
-    if (!GetFileSizeEx(file, &file_size)) {
-        CloseHandle(file);
-        return OBSCURA64_IO_ERROR;
-    }
-    if (file_size.QuadPart != (LONGLONG)OBSCURA64_STATE_V1_SIZE) {
-        CloseHandle(file);
-        return OBSCURA64_STATE_CORRUPT;
-    }
-    if (!ReadFile(file, bytes, (DWORD)sizeof(bytes), &bytes_read, NULL)) {
-        CloseHandle(file);
-        return OBSCURA64_IO_ERROR;
-    }
-    if (bytes_read != sizeof(bytes)) {
-        CloseHandle(file);
-        return OBSCURA64_STATE_CORRUPT;
-    }
-    if (!ReadFile(file, &extra, 1, &extra_read, NULL)) {
-        CloseHandle(file);
-        return OBSCURA64_IO_ERROR;
-    }
-    if (extra_read != 0) {
-        CloseHandle(file);
-        return OBSCURA64_STATE_CORRUPT;
-    }
-    if (!CloseHandle(file)) {
-        return OBSCURA64_IO_ERROR;
-    }
-
-    parse_status = obscura64_state_deserialize(bytes, sizeof(bytes), state);
-    if (parse_status == OBSCURA64_CORE_STATUS_SUCCESS) {
-        return OBSCURA64_OK;
-    }
-    return parse_status == OBSCURA64_CORE_STATUS_CRYPTO_FAILURE ?
-        OBSCURA64_IO_ERROR : OBSCURA64_STATE_CORRUPT;
+    return obscura64_persistence_read_verified(state_path, bytes, sizeof(bytes), verify_state, state);
 }
 
 static obscura64_status read_state_with_retries(
@@ -237,37 +201,11 @@ static obscura64_status write_initial_state_file(
     const unsigned char serialized[OBSCURA64_STATE_V1_SIZE],
     obscura64_project_state *state)
 {
-    HANDLE file;
-    DWORD bytes_written = 0;
-    obscura64_status status;
-
-    file = CreateFileW(state_path, GENERIC_WRITE, FILE_SHARE_READ, NULL,
-                       CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (file == INVALID_HANDLE_VALUE) {
-        const DWORD error = GetLastError();
-        if (error == ERROR_FILE_EXISTS || error == ERROR_ALREADY_EXISTS) {
-            return read_state_with_retries(state_path, state, PROJECT_RACE_RETRIES);
-        }
-        return OBSCURA64_IO_ERROR;
-    }
-
-    if (!WriteFile(file, serialized, OBSCURA64_STATE_V1_SIZE, &bytes_written, NULL) ||
-        bytes_written != OBSCURA64_STATE_V1_SIZE || !FlushFileBuffers(file)) {
-        (void)CloseHandle(file);
-        (void)DeleteFileW(state_path);
-        return OBSCURA64_IO_ERROR;
-    }
-    if (!CloseHandle(file)) {
-        (void)DeleteFileW(state_path);
-        return OBSCURA64_IO_ERROR;
-    }
-
-    status = read_state_file(state_path, state);
-    if (status != OBSCURA64_OK) {
-        (void)DeleteFileW(state_path);
-        return OBSCURA64_IO_ERROR;
-    }
-    return OBSCURA64_OK;
+    obscura64_status status = obscura64_persistence_create_new_verified(
+        state_path, serialized, OBSCURA64_STATE_V1_SIZE, verify_state, state);
+    if (status == OBSCURA64_BUSY)
+        return read_state_with_retries(state_path, state, PROJECT_RACE_RETRIES);
+    return status;
 }
 
 static obscura64_status open_project_state(
@@ -392,107 +330,6 @@ obscura64_status obscura64_project_open_internal(
         state.profile, OBSCURA64_PROFILE_SIZE, provider, out_context);
 }
 
-/* Force-only basic persistence. Fixed .tmp names are protected by operation.lock.
- * A pre-existing temp is an error; this stage does not remove stale files. */
-static obscura64_status read_blob_file(const WCHAR *path, unsigned char *bytes, DWORD size)
-{
-    DWORD attributes = GetFileAttributesW(path);
-    if (attributes == INVALID_FILE_ATTRIBUTES)
-        return is_path_not_found_error(GetLastError()) ? OBSCURA64_STATE_MISSING : OBSCURA64_IO_ERROR;
-    if ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0) return OBSCURA64_STATE_CORRUPT;
-    HANDLE file = CreateFileW(path, GENERIC_READ,
-        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-        NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    LARGE_INTEGER actual_size;
-    DWORD read_count = 0, extra_count = 0;
-    unsigned char extra;
-    obscura64_status status = OBSCURA64_IO_ERROR;
-    if (file == INVALID_HANDLE_VALUE)
-        return is_path_not_found_error(GetLastError()) ? OBSCURA64_STATE_MISSING : OBSCURA64_IO_ERROR;
-    if (!GetFileSizeEx(file, &actual_size)) goto done;
-    if (actual_size.QuadPart != size) { status = OBSCURA64_STATE_CORRUPT; goto done; }
-    if (!ReadFile(file, bytes, size, &read_count, NULL)) goto done;
-    if (read_count != size) { status = OBSCURA64_STATE_CORRUPT; goto done; }
-    if (!ReadFile(file, &extra, 1, &extra_count, NULL)) goto done;
-    status = extra_count == 0 ? OBSCURA64_OK : OBSCURA64_STATE_CORRUPT;
-done:
-    if (!CloseHandle(file)) status = OBSCURA64_IO_ERROR;
-    return status;
-}
-
-static obscura64_status verify_blob_file(
-    const WCHAR *path, const unsigned char *expected, DWORD size, int is_history)
-{
-    unsigned char bytes[OBSCURA64_HISTORY_V1_SIZE];
-    obscura64_core_status parsed;
-    obscura64_status status = read_blob_file(path, bytes, size);
-    if (status != OBSCURA64_OK) return status;
-    if (memcmp(bytes, expected, size) != 0) return OBSCURA64_STATE_CORRUPT;
-    if (is_history) {
-        obscura64_project_history history;
-        parsed = obscura64_history_deserialize(bytes, size, &history);
-    } else {
-        obscura64_project_state state;
-        parsed = obscura64_state_deserialize(bytes, size, &state);
-    }
-    if (parsed == OBSCURA64_CORE_STATUS_SUCCESS) return OBSCURA64_OK;
-    return parsed == OBSCURA64_CORE_STATUS_CRYPTO_FAILURE ? OBSCURA64_IO_ERROR : OBSCURA64_STATE_CORRUPT;
-}
-
-static obscura64_status commit_blob_once(
-    const WCHAR *target, const unsigned char *bytes, DWORD size, int is_history,
-    int *renamed)
-{
-    size_t target_length = wcslen(target);
-    WCHAR *temporary;
-    HANDLE file;
-    DWORD written = 0;
-    obscura64_status status = OBSCURA64_IO_ERROR;
-    *renamed = 0;
-    if (target_length > SIZE_MAX / sizeof(WCHAR) - 5U) return OBSCURA64_SIZE_OVERFLOW;
-    temporary = (WCHAR *)malloc((target_length + 5U) * sizeof(*temporary));
-    if (temporary == NULL) return OBSCURA64_OUT_OF_MEMORY;
-    memcpy(temporary, target, target_length * sizeof(*temporary));
-    memcpy(temporary + target_length, L".tmp", 5U * sizeof(*temporary));
-    file = CreateFileW(temporary, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (file == INVALID_HANDLE_VALUE) { free(temporary); return OBSCURA64_IO_ERROR; }
-    if (!WriteFile(file, bytes, size, &written, NULL) || written != size || !FlushFileBuffers(file)) {
-        (void)CloseHandle(file);
-        goto cleanup_temp;
-    }
-    if (!CloseHandle(file)) goto cleanup_temp;
-    status = verify_blob_file(temporary, bytes, size, is_history);
-    if (status != OBSCURA64_OK) goto cleanup_temp;
-    if (!MoveFileExW(temporary, target, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
-        status = OBSCURA64_IO_ERROR;
-        goto cleanup_temp;
-    }
-    *renamed = 1;
-    status = verify_blob_file(target, bytes, size, is_history);
-    free(temporary);
-    return status;
-cleanup_temp:
-    (void)DeleteFileW(temporary); /* Only the file successfully created by this call. */
-    free(temporary);
-    return status;
-}
-
-static obscura64_status basic_replace_blob(
-    const WCHAR *target, const unsigned char *bytes, DWORD size, int is_history,
-    const unsigned char *old_bytes)
-{
-    int renamed;
-    obscura64_status status = commit_blob_once(target, bytes, size, is_history, &renamed);
-    if (status != OBSCURA64_OK && renamed && old_bytes != NULL) {
-        int restored;
-        /* Final verification failed after rename: attempt to restore the old canonical blob.
-         * Arbitrary storage failures/crashes are outside this basic Stage 4.3 mechanism. */
-        if (commit_blob_once(target, old_bytes, size, is_history, &restored) != OBSCURA64_OK)
-            return OBSCURA64_IO_ERROR;
-    }
-    return status;
-}
-
 /* Preserve the given newest-first order; the generic history parser stays strict.
  * Only entry 0 may overlap current after a prior current-commit failure. */
 static obscura64_status build_force_history(
@@ -581,13 +418,9 @@ static obscura64_status force_reinitialize_internal(
     status = read_state_file(current_path, &old_state);
     if (status != OBSCURA64_OK) goto cleanup;
     if (old_state.generation == UINT64_MAX) { status = OBSCURA64_SIZE_OVERFLOW; goto cleanup; }
-    status = read_blob_file(history_path, old_history_bytes, OBSCURA64_HISTORY_V1_SIZE);
+    status = obscura64_persistence_read_verified(history_path, old_history_bytes,
+        OBSCURA64_HISTORY_V1_SIZE, verify_history, &old_history);
     if (status == OBSCURA64_OK) {
-        core_status = obscura64_history_deserialize(old_history_bytes, sizeof(old_history_bytes), &old_history);
-        if (core_status != OBSCURA64_CORE_STATUS_SUCCESS) {
-            status = core_status == OBSCURA64_CORE_STATUS_CRYPTO_FAILURE ? OBSCURA64_IO_ERROR : OBSCURA64_STATE_CORRUPT;
-            goto cleanup;
-        }
         if (memcmp(old_history.project_id, old_state.project_id, OBSCURA64_PROJECT_ID_SIZE) != 0) {
             status = OBSCURA64_STATE_CORRUPT; goto cleanup;
         }
@@ -599,7 +432,8 @@ static obscura64_status force_reinitialize_internal(
     if (status != OBSCURA64_OK) goto cleanup;
     core_status = obscura64_history_serialize(&new_history, history_bytes);
     if (core_status != OBSCURA64_CORE_STATUS_SUCCESS) { status = OBSCURA64_IO_ERROR; goto cleanup; }
-    status = basic_replace_blob(history_path, history_bytes, sizeof(history_bytes), 1,
+    status = obscura64_persistence_replace_verified(history_path, history_bytes,
+        sizeof(history_bytes), verify_history, NULL,
         history_exists ? old_history_bytes : NULL);
     if (status != OBSCURA64_OK) goto cleanup;
 
@@ -619,7 +453,8 @@ static obscura64_status force_reinitialize_internal(
         obscura64_state_serialize(&new_state, new_current_bytes) != OBSCURA64_CORE_STATUS_SUCCESS) {
         status = OBSCURA64_IO_ERROR; goto cleanup;
     }
-    status = basic_replace_blob(current_path, new_current_bytes, sizeof(new_current_bytes), 0, current_bytes);
+    status = obscura64_persistence_replace_verified(current_path, new_current_bytes,
+        sizeof(new_current_bytes), verify_state, NULL, current_bytes);
     if (status != OBSCURA64_OK) goto cleanup;
     /* The provider-validated context was reserved before any disk change to avoid
      * reporting allocation failure after committing the new generation. */
