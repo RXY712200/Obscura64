@@ -179,7 +179,7 @@ static int project_checks(void)
     /* Every fixture keeps valid current authoritative for normal open. */
     for (variant = 0; variant < 25; ++variant) {
         int missing_history = variant == 0 || variant == 1;
-        obscura64_status expected = OBSCURA64_STATE_CORRUPT;
+        obscura64_status expected = OBSCURA64_UNRECOVERABLE;
         make_current(&current, 5);
         if (variant == 0 || variant == 2 || variant == 16) current.generation = 1;
         if (variant == 3 || variant == 17) current.generation = 2;
@@ -188,7 +188,7 @@ static int project_checks(void)
         if (variant == 21 || variant == 22 || variant == 24) current.generation = 8;
         make_history(&history, &current, variant >= 16 && variant <= 20);
         if (variant <= 6 || (variant >= 16 && variant <= 20)) expected = OBSCURA64_OK;
-        if (variant == 1) expected = OBSCURA64_STATE_MISSING;
+        if (variant == 1) expected = OBSCURA64_UNRECOVERABLE;
         if (variant == 8) history.project_id[0] ^= 1;
         if (variant == 9) history.entries[0].generation = 6; /* Future. */
         if (variant == 10) { /* Same generation, different Profile. */
@@ -283,7 +283,7 @@ static int project_checks(void)
             "corrupt history cannot block current data decoding");
         obscura64_free(decoded); decoded = NULL;
         obscura64_context_destroy(context); context = NULL;
-        CHECK(obscura64_force_reinitialize(utf8, &context) == OBSCURA64_STATE_CORRUPT && context == NULL,
+        CHECK(obscura64_force_reinitialize(utf8, &context) == OBSCURA64_UNRECOVERABLE && context == NULL,
               "Force rejects corrupt real history");
         CHECK(file_io(current_path, current_after, sizeof(current_after), 0) &&
             memcmp(current_after, current_bytes, sizeof(current_bytes)) == 0 &&
@@ -299,7 +299,7 @@ static int project_checks(void)
         obscura64_free(decoded);
         obscura64_free(encoded);
         obscura64_context_destroy(context); context = NULL;
-        CHECK(obscura64_force_reinitialize(utf8, &context) == OBSCURA64_STATE_MISSING && context == NULL,
+        CHECK(obscura64_force_reinitialize(utf8, &context) == OBSCURA64_UNRECOVERABLE && context == NULL,
               "Force rejects missing real history at generation two");
         CHECK(file_io(current_path, current_after, sizeof(current_after), 0) &&
             memcmp(current_after, current_bytes, sizeof(current_bytes)) == 0 && directory_clean(directory, 0),

@@ -257,6 +257,25 @@ obscura64_status obscura64_project_open_internal(
     }
 done:
     if (lock != NULL && obscura64_lock_release(lock) != OBSCURA64_OK) status = OBSCURA64_IO_ERROR;
+    lock = NULL;
+    if (!fresh && directory != NULL && lock_path != NULL &&
+        (status == OBSCURA64_STATE_MISSING || status == OBSCURA64_STATE_CORRUPT)) {
+        status = obscura64_lock_acquire_exclusive(lock_path, &lock);
+        if (status == OBSCURA64_OK) {
+            status = obscura64_recovery_ensure(project, directory, 0, &state);
+            if (status == OBSCURA64_OK) memcpy(context->profile, state.profile, OBSCURA64_PROFILE_SIZE);
+            if (obscura64_lock_release(lock) != OBSCURA64_OK) status = OBSCURA64_IO_ERROR;
+            lock = NULL;
+        }
+    }
+    /* Maintenance never demotes a successfully constructed current Context.
+       Re-read under exclusive lock: another Force may have committed meanwhile. */
+    if (status == OBSCURA64_OK &&
+        obscura64_lock_acquire_exclusive(lock_path, &lock) == OBSCURA64_OK) {
+        obscura64_recovery_maintain(project, directory);
+        (void)obscura64_lock_release(lock);
+        lock = NULL;
+    }
     if (status == OBSCURA64_OK) { *out_context = context; context = NULL; }
     obscura64_context_destroy(context);
     free(lock_path); free(current); free(directory); free(project);
@@ -339,6 +358,12 @@ static obscura64_status force_reinitialize_internal(
     status = obscura64_lock_acquire_exclusive(lock_path, &lock);
     if (status != OBSCURA64_OK) goto cleanup;
     status = read_state_file(current_path, &old_state);
+    if (status == OBSCURA64_OK && old_state.generation == UINT64_MAX) {
+        status = OBSCURA64_SIZE_OVERFLOW; goto cleanup;
+    }
+    if (status != OBSCURA64_OK && status != OBSCURA64_STATE_MISSING && status != OBSCURA64_STATE_CORRUPT)
+        goto cleanup;
+    status = obscura64_recovery_ensure(project, directory, 1, &old_state);
     if (status != OBSCURA64_OK) goto cleanup;
     if (old_state.generation == UINT64_MAX) { status = OBSCURA64_SIZE_OVERFLOW; goto cleanup; }
     status = obscura64_persistence_read_verified(history_path, old_history_bytes,
@@ -383,6 +408,7 @@ static obscura64_status force_reinitialize_internal(
     /* The provider-validated context was reserved before any disk change to avoid
      * reporting allocation failure after committing the new generation. */
     memcpy(reserved_context->profile, new_state.profile, OBSCURA64_PROFILE_SIZE);
+    (void)obscura64_redundancy_sync(project, &new_state, &new_history);
     *out_context = reserved_context;
     reserved_context = NULL;
 cleanup:

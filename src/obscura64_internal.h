@@ -7,6 +7,15 @@
 #include <stdint.h>
 #include <wchar.h>
 
+typedef struct obscura64_snapshot_paths {
+    wchar_t *directory;
+    wchar_t *current;
+    wchar_t *history;
+} obscura64_snapshot_paths;
+obscura64_status obscura64_redundancy_paths(const wchar_t *project,
+    int create, obscura64_snapshot_paths *paths);
+void obscura64_snapshot_paths_free(obscura64_snapshot_paths *paths);
+
 typedef struct obscura64_lock obscura64_lock;
 obscura64_status obscura64_lock_acquire_shared(const wchar_t *path, obscura64_lock **lock);
 obscura64_status obscura64_lock_acquire_exclusive(const wchar_t *path, obscura64_lock **lock);
@@ -100,6 +109,19 @@ typedef struct obscura64_project_history {
     uint16_t count;
     obscura64_history_entry entries[OBSCURA64_HISTORY_CAPACITY];
 } obscura64_project_history;
+
+obscura64_status obscura64_snapshot_read_current(const wchar_t *path, obscura64_project_state *state);
+obscura64_status obscura64_snapshot_read_history(const wchar_t *path, obscura64_project_history *history);
+obscura64_status obscura64_snapshot_write_current(const wchar_t *path, const obscura64_project_state *state);
+obscura64_status obscura64_snapshot_write_history(const wchar_t *path, const obscura64_project_history *history);
+/* Caller holds the project exclusive lock. No policy decisions in the mirror. */
+obscura64_status obscura64_redundancy_sync(const wchar_t *project,
+    const obscura64_project_state *state, const obscura64_project_history *history);
+/* Single recovery decision path; caller owns exclusive project coordination. */
+obscura64_status obscura64_recovery_ensure(const wchar_t *project, const wchar_t *directory,
+    int require_managed, obscura64_project_state *state);
+/* Re-reads disk state under the caller's exclusive lock before best-effort sync. */
+void obscura64_recovery_maintain(const wchar_t *project, const wchar_t *directory);
 
 /* Force-only cross-file validation. NULL history means the file is absent.
  * Does not read, mutate, repair or recover either authoritative file.

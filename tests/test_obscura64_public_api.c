@@ -316,7 +316,7 @@ int main(void)
         {
             int statuses_nonempty = 1;
             obscura64_status status;
-            for (status = OBSCURA64_OK; status <= OBSCURA64_OUT_OF_MEMORY;
+            for (status = OBSCURA64_OK; status <= OBSCURA64_UNRECOVERABLE;
                  status = (obscura64_status)(status + 1)) {
                 const char *description = obscura64_status_string(status);
                 if (description == NULL || description[0] == '\0') {
@@ -327,6 +327,9 @@ int main(void)
         }
         check(strcmp(obscura64_status_string(OBSCURA64_OK), "success") == 0,
               "status string for success");
+        check(strcmp(obscura64_status_string(OBSCURA64_UNRECOVERABLE),
+                     "managed project state cannot be recovered") == 0,
+              "stable UNRECOVERABLE status string");
         check(strcmp(obscura64_status_string((obscura64_status)999), "unknown status") == 0,
               "unknown status has fallback string");
     }

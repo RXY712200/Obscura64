@@ -29,7 +29,8 @@ typedef enum obscura64_status {
     OBSCURA64_STATE_MISSING,
     OBSCURA64_STATE_CORRUPT,
     OBSCURA64_RNG_FAILURE,
-    OBSCURA64_BUSY
+    OBSCURA64_BUSY,
+    OBSCURA64_UNRECOVERABLE
 } obscura64_status;
 
 typedef struct obscura64_context obscura64_context;

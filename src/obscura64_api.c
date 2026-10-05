@@ -227,6 +227,8 @@ const char *obscura64_status_string(obscura64_status status)
         return "random number generation failure";
     case OBSCURA64_BUSY:
         return "project operation busy";
+    case OBSCURA64_UNRECOVERABLE:
+        return "managed project state cannot be recovered";
     default:
         return "unknown status";
     }

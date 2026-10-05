@@ -85,12 +85,26 @@ static int test_no_temps(test_project *p)
     return GetLastError() == ERROR_FILE_NOT_FOUND;
 }
 
+static int test_remove_owned_directory(const WCHAR *path)
+{
+    unsigned int attempt;
+    for (attempt = 0; attempt < 25U; ++attempt) {
+        if (RemoveDirectoryW(path)) return 1;
+        if (GetLastError() != ERROR_DIR_NOT_EMPTY) {
+            fprintf(stderr, "Test directory removal failed: Windows error %lu\n", (unsigned long)GetLastError());
+            return 0;
+        }
+        Sleep(10);
+    }
+    return 0; /* Persistent extra entries still fail; never delete them here. */
+}
+
 static int test_cleanup(test_project *p)
 {
     int ok = DeleteFileW(p->current) != 0;
     if (GetFileAttributesW(p->history) != INVALID_FILE_ATTRIBUTES && !DeleteFileW(p->history)) ok = 0;
     if (!DeleteFileW(p->lock)) ok = 0;
-    if (!RemoveDirectoryW(p->directory) || !RemoveDirectoryW(p->project)) ok = 0;
+    if (!test_remove_owned_directory(p->directory) || !test_remove_owned_directory(p->project)) ok = 0;
     return ok;
 }
 

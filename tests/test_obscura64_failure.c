@@ -136,9 +136,10 @@ int main(int argc, char **argv)
     CHECK(test_bytes(p.current, after, 160, 0), "save valid current before corruption");
     after[80] ^= 1;
     CHECK(test_bytes(p.current, after, 160, 1), "corrupt owned authoritative current");
-    CHECK(obscura64_open(p.utf8, &context) == OBSCURA64_STATE_CORRUPT && context == NULL &&
-        obscura64_force_reinitialize(p.utf8, &context) == OBSCURA64_STATE_CORRUPT && context == NULL,
-        "no fallback to valid stale temp or history for corrupt current");
+    CHECK(test_bytes(p.history, junk, sizeof(junk), 1), "make named history unusable to isolate stale-temp exclusion");
+    CHECK(obscura64_open(p.utf8, &context) == OBSCURA64_UNRECOVERABLE && context == NULL &&
+        obscura64_force_reinitialize(p.utf8, &context) == OBSCURA64_UNRECOVERABLE && context == NULL,
+        "no fallback to valid stale temp when named recovery sources unavailable");
     CHECK(test_bytes(p.current, before, 160, 1) && test_bytes(p.history, history_before, 336, 1), "restore owned canonical baseline");
     CHECK(DeleteFileW(stale_current) && DeleteFileW(stale_history) && DeleteFileW(stale_valid), "test deletes only its deliberate sentinels");
 

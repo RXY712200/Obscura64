@@ -41,7 +41,7 @@ Private validation, serialization, and deserialization enforce exact length, fix
 
 Every successful Force retains the most recent three historical generations, or fewer when fewer are available. Entry 0 is the current generation/Profile from before Force, followed by existing history entries in their original newest-first order. When the capacity is exceeded, the oldest generation is discarded. With no overlap, count advances 0 to 1, 1 to 2, 2 to 3, and then stays 3. All unused entries are zero. No sorting or global Profile-uniqueness requirement is applied.
 
-Existing history is validated before any commit, including matching Project ID and strictly descending generations. Each history generation must be below current.generation, except that entry 0 may have the same generation and identical 64-byte Profile as current. That overlap can result from an earlier failed current replacement and is retained only once in the new history. Same generation with a different Profile, a future history generation, or malformed ordering is rejected as STATE_CORRUPT without rewriting either authoritative file. The generic History V1 parser does not accept duplicate generations within history.
+Existing history is validated before any commit, including matching Project ID and strictly descending generations. Each history generation must be below current.generation, except that entry 0 may have the same generation and identical 64-byte Profile as current. That overlap can result from an earlier failed current replacement and is retained only once in the new history. Same generation with a different Profile, a future history generation, or malformed ordering is rejected by managed/structural validation. Stage 6 may repair from a legitimate matching backup; otherwise Force returns UNRECOVERABLE without mutating current/history. The generic History V1 parser does not accept duplicate generations within history.
 
 Force acquires a non-waiting exclusive LockFileEx range on the persistent `<project>/.obscura64/operation.lock`. Active conflicting kernel locks return `OBSCURA64_BUSY`; unlocked file existence is harmless. Normal open uses a shared range lock. Handles are unlocked/closed on exit; the coordination file is not removed.
 
@@ -51,7 +51,7 @@ Stage 5.1 centralizes byte persistence in a private Windows module. Replacement 
 
 This is hardened persistence with tested process-crash windows, not a guarantee against arbitrary storage or controller failures. An interrupted operation may leave a harmless coordination file and unrelated temp artifacts; Windows releases its kernel locking authority and future operations ignore stale temp contents.
 
-History is currently saved only. Normal open does not use it to recover missing or corrupt current state; automatic recovery remains Stage 6 work.
+Stage 6 permits validated recent-history fallback when exact current recovery is unavailable; see [RECOVERY_V1.md](RECOVERY_V1.md). History promotion may roll back Profile/generation.
 
 ### Stage 5.1 verified byte persistence
 
@@ -61,7 +61,7 @@ Replacement sequence: unique same-directory temp with BCrypt suffix and CREATE_N
 
 First initialization still creates the authoritative file with CREATE_NEW, then writes, flushes, closes and verifies it. A losing initializer reads the winning state using the existing bounded retry behavior; it never overwrites the winner. Force still commits verified history before preparing/replacing current and retains the previous Profile on current replacement failure.
 
-This improves write/replacement reliability but does not prove absolute power-loss durability under every filesystem, device or controller failure. Stage 5.1 originally retained the Force existence lock; it is superseded by the completed kernel coordination described below. No automatic recovery is added; that remains Stage 6 work.
+This improves write/replacement reliability but does not prove absolute power-loss durability under every filesystem, device or controller failure. Stage 5.1 originally retained the Force existence lock; it is superseded by the completed kernel coordination described below. Stage 5.1 alone added no automatic recovery; Stage 6 recovery is described below.
 
 ### Stage 5.2 managed-state consistency
 
@@ -69,11 +69,11 @@ This improves write/replacement reliability but does not prove absolute power-lo
 
 Force uses a private cross-file validator after loading current/history under the existing operation lock and before writing either authoritative file. Existing format validators still own binary parsing, hashes and Profile validation; the byte persistence layer is unchanged. Current State V1 remains 160 bytes and History V1 remains 336 bytes, with unchanged magic, versions and layout.
 
-For current generation N, a steady history has exactly min(N-1, 3) entries: N-1, N-2, N-3, stopping at generation 1. Generation 1 permits absent history or an existing valid empty history. Missing history at N>1 returns STATE_MISSING on Force; an existing empty/incomplete/gapped window returns STATE_CORRUPT. Project IDs must match byte-for-byte. Future generations and same-generation conflicting Profiles return STATE_CORRUPT.
+For current generation N, a steady history has exactly min(N-1, 3) entries: N-1, N-2, N-3, stopping at generation 1. Generation 1 permits absent history or an existing valid empty history. The private managed validator diagnoses absent required history as STATE_MISSING and empty/incomplete/gapped windows as STATE_CORRUPT. Stage 6 Force attempts legitimate repair and returns UNRECOVERABLE if no mutation-safe state can be reconstructed. Project IDs must match byte-for-byte. Future generations and same-generation conflicting Profiles return STATE_CORRUPT.
 
 A safe transitional overlap has exactly min(N, 3) entries: N, N-1, N-2, stopping at generation 1. Entry 0 must match both current generation and all 64 Profile bytes. The private validator reports steady/overlap; the existing history merge consumes that classification and includes an overlap only once. Incomplete overlap windows are rejected. Profiles may repeat across different, nonadjacent generations; there is no global Profile uniqueness rule.
 
-The generic History V1 parser continues to accept strictly descending, structurally valid non-contiguous generations such as 7,5,3. The managed validator rejects that history for current generation 8. Invalid sets leave current/history bytes unchanged, with no owned persistence temp left behind. Stage 5.2 adds detection, not repair or recovery. The completed Stage 5 locking and crash/fault tests are described below; automatic recovery remains Stage 6.
+The generic History V1 parser continues to accept strictly descending, structurally valid non-contiguous generations such as 7,5,3. The managed validator rejects that history for current generation 8. Invalid sets leave current/history bytes unchanged, with no owned persistence temp left behind. Stage 5.2 adds detection, not repair or recovery. Stage 5 locking and crash/fault tests are described below; completed Stage 6 adds the recovery policy in RECOVERY_V1.md.
 
 ### Stage 5 completed: locking and tested failure windows
 
@@ -89,4 +89,8 @@ Verified same-directory replacement, FlushFileBuffers, and MOVEFILE_WRITE_THROUG
 
 Directory durability limitation: the local Windows probe could open and flush a directory with GENERIC_READ | GENERIC_WRITE and FILE_FLAG_BACKUP_SEMANTICS; read-only directory flush failed with ERROR_ACCESS_DENIED. This observation does not establish a portable directory-metadata durability contract across Windows filesystems. No mandatory directory-handle flush or privileged volume flush is added: it would introduce additional access/compatibility requirements without proving transactional or controller-level durability. File-level flush and write-through replacement are retained. See [FlushFileBuffers](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-flushfilebuffers) and [directory handles](https://learn.microsoft.com/en-us/windows/win32/fileio/obtaining-a-handle-to-a-directory).
 
-Stage 5 is complete within these tested Windows persistence guarantees. There are no redundant copies, ProgramData/AppData/Registry storage or automatic recovery. Stage 6 is next; Stage 7 release work remains later.
+Stage 5 is complete within these tested Windows persistence guarantees. Stage 6 now adds per-user LocalAppData redundancy and automatic recovery; see RECOVERY_V1.md. No ProgramData or Registry copies are implemented. Stage 7 remains next.
+
+### Stage 6 redundancy and recovery
+
+Valid project current remains highest authority. Missing/corrupt current in an existing container triggers exclusive-lock recovery from exact LocalAppData current, then validated project/backup history. A fresh container absence still initializes a new identity. Normal open can remain available with unrepaired history; Force requires a mutation-safe set or returns OBSCURA64_UNRECOVERABLE. Existing State/History binary formats are unchanged. See [RECOVERY_V1.md](RECOVERY_V1.md) for identity conflict rules, partial recovery, path-local mirrors, repair ordering, and rollback limitations. Stage 6 is complete; Stage 7 remains next.

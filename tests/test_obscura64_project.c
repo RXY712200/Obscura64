@@ -330,20 +330,20 @@ int main(void)
     invalid_context = (obscura64_context *)1;
     CHECK(obscura64_open(nondirectory_utf8, &invalid_context) == OBSCURA64_IO_ERROR &&
           invalid_context == NULL, "regular file project path rejected");
-    CHECK(obscura64_open(empty_utf8, &invalid_context) == OBSCURA64_STATE_MISSING &&
+    CHECK(obscura64_open(empty_utf8, &invalid_context) == OBSCURA64_UNRECOVERABLE &&
           invalid_context == NULL, "empty state directory is missing state");
 
     memcpy(current, stable, sizeof(current));
     current[70] ^= 1;
     CHECK(overwrite_state_bytes(project, current), "write corrupted test state");
     invalid_context = (obscura64_context *)1;
-    CHECK(obscura64_open(project_utf8, &invalid_context) == OBSCURA64_STATE_CORRUPT &&
+    CHECK(obscura64_open(project_utf8, &invalid_context) == OBSCURA64_UNRECOVERABLE &&
           invalid_context == NULL, "corrupt state rejected");
     CHECK(read_state_bytes(project, current) && current[70] == (unsigned char)(stable[70] ^ 1),
           "corrupt state remains untouched");
     CHECK(delete_current_state(project), "delete current state for missing test");
     invalid_context = (obscura64_context *)1;
-    CHECK(obscura64_open(project_utf8, &invalid_context) == OBSCURA64_STATE_MISSING &&
+    CHECK(obscura64_open(project_utf8, &invalid_context) == OBSCURA64_UNRECOVERABLE &&
           invalid_context == NULL, "existing state directory without file is missing");
     {
         char *status_names[] = {"I/O error", "project state missing",

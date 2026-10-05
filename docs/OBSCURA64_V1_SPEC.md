@@ -254,19 +254,19 @@ Normal initialization:
 - If a valid Profile already exists, ordinary initialization must continue using the original Profile.
 - Ordinary initialization must never randomize a new Profile.
 
-Only explicit **Force Reinitialize** may replace the current Profile.
+Only explicit **Force Reinitialize** selects a new random current Profile. Stage 6 recovery may restore an already stored Profile, including an older historical Profile.
 
 ## 11. History
 
 ### Force Reinitialize and latest-three retention
 
-Force is explicit through `obscura64_force_reinitialize` or the Advanced custom Provider variant. It requires existing valid current state, preserves Project ID, increments generation by one with overflow checking, and requires a different frozen Profile. Existing contexts keep their old Profile; callers must retire them themselves.
+Force is explicit through `obscura64_force_reinitialize` or the Advanced custom Provider variant. It requires existing managed-project evidence and a validated mutation-safe state after any necessary recovery, preserves Project ID, increments generation by one with overflow checking, and requires a different frozen Profile. Existing contexts keep their old Profile; callers must retire them themselves.
 
 The previous current generation/Profile is saved and verified in history before current is replaced. Force automatically retains the latest three historical generations, newest first, and discards the oldest when full. The fixed 336-byte History V1 format is described in `PROJECT_HISTORY_V1.md`.
 
-Historical generations are strictly decreasing, with no continuity requirement. Profiles may repeat across non-adjacent generations. History generations must be less than current.generation; a matching entry-0/current overlap from a failed current replacement is the sole exception and is normalized during Force. Same-generation Profile conflicts and future history generations are rejected without rewriting current or history. The generic history parser stays strict and rejects duplicate generations.
+The generic History V1 parser requires strictly decreasing generations without a continuity requirement. Managed project validation additionally requires a complete contiguous window. Profiles may repeat across non-adjacent generations. History generations must be less than current.generation; a matching entry-0/current overlap from a failed current replacement is the sole exception and is normalized during Force. Same-generation Profile conflicts and future history generations are rejected without rewriting current or history. The generic history parser stays strict and rejects duplicate generations.
 
-Force uses a persistent `operation.lock` with an exclusive Windows byte-range lock; normal open uses a shared lock. Only conflicting active kernel locks cause BUSY, not file existence. Verified replacement writes and verifies a unique same-directory temp, uses MoveFileExW with replacement/write-through flags, and verifies the target. Stage 5 coordination and failure/crash tests are described below. History is not automatically used to recover current state.
+Force uses a persistent `operation.lock` with an exclusive Windows byte-range lock; normal open uses a shared lock. Only conflicting active kernel locks cause BUSY, not file existence. Verified replacement writes and verifies a unique same-directory temp, uses MoveFileExW with replacement/write-through flags, and verifies the target. Stage 5 coordination and failure/crash tests are described below. Stage 6 permits validated history promotion when exact-current recovery is unavailable.
 
 Before Force Reinitialize, the current Profile must first be placed into history. V1 stores at most the most recent three generations of Profiles. When there are more than three generations, evict the oldest record. The current Profile and historical Profiles are distinct concepts.
 
@@ -276,7 +276,7 @@ Project-directory state is authoritative. State in other Windows locations is on
 
 If the project primary state is valid but another copy disagrees, the project primary state wins. An invalid or old copy must not overwrite a valid project primary state.
 
-If the project primary state is damaged, validate redundant copies. Only a copy that can be confirmed complete, valid, and matching the project may be used for recovery. Historical state may be tried if necessary. If all automatic recovery fails, return an explicit `UNRECOVERABLE` state.
+If the project primary state is damaged, validate redundant copies. Complete snapshots must pass managed validation and match project-local identity evidence. A validated exact backup current may also restore runtime without usable history; Force still requires mutation-safe history. Historical state may be tried if necessary. If all automatic recovery fails, return an explicit `UNRECOVERABLE` state.
 
 It is prohibited to silently generate a new Profile because state is missing or damaged.
 
@@ -315,7 +315,7 @@ V1 reliability goals:
 - An invalid backup must not overwrite valid primary state.
 - When recovery is impossible, the module must not secretly create a new identity.
 
-Specific Windows implementation details are for a later stage.
+Stage 5 Windows persistence and Stage 6 LocalAppData recovery details are documented below and in RECOVERY_V1.md.
 
 ## 16. Explicit Non-Goals for V1
 
@@ -345,7 +345,7 @@ Specific Windows implementation details are for a later stage.
 
 - `obscura64_open` accepts an existing project directory as a UTF-8 path and uses the configured default Provider. `obscura64_open_with_provider` is the advanced equivalent for a caller-supplied codec Provider.
 - The authoritative current state is `<project>/.obscura64/current.state`; it moves with the project. Windows path handling converts strict UTF-8 to UTF-16 and uses wide filesystem APIs.
-- If `.obscura64` does not exist, first initialization creates generation 1 with a random nonzero Project ID and a randomly selected frozen V1 Profile. If `.obscura64` exists without `current.state`, open returns a missing-state status. Existing corrupt state is rejected and is never silently regenerated.
+- If `.obscura64` does not exist, first initialization creates generation 1 with a random nonzero Project ID and a randomly selected frozen V1 Profile. Stage 6 extends existing-container missing/corrupt current handling with validated recovery or UNRECOVERABLE; it never silently regenerates an identity.
 - Normal open validates and uses the stored Profile without changing the state. First creation uses `CREATE_NEW` and rereads the written state before returning a context.
 - Stage 5 adds verified replacement and kernel process coordination to first-write handling; its tested guarantees and remaining durability limits are documented below.
 
@@ -370,7 +370,7 @@ Replacement sequence: unique same-directory temp with BCrypt suffix and CREATE_N
 
 First initialization still creates the authoritative file with CREATE_NEW, then writes, flushes, closes and verifies it. A losing initializer reads the winning state using the existing bounded retry behavior; it never overwrites the winner. Force still commits verified history before preparing/replacing current and retains the previous Profile on current replacement failure.
 
-This improves write/replacement reliability but does not prove absolute power-loss durability under every filesystem, device or controller failure. Stage 5.1 originally retained the Force existence lock; it is superseded by the completed kernel coordination described below. No automatic recovery is added; that remains Stage 6 work.
+This improves write/replacement reliability but does not prove absolute power-loss durability under every filesystem, device or controller failure. Stage 5.1 originally retained the Force existence lock; it is superseded by the completed kernel coordination described below. Stage 5.1 alone added no automatic recovery; Stage 6 recovery is described below.
 
 ### Stage 5.2 managed-state consistency
 
@@ -378,11 +378,11 @@ This improves write/replacement reliability but does not prove absolute power-lo
 
 Force uses a private cross-file validator after loading current/history under the existing operation lock and before writing either authoritative file. Existing format validators still own binary parsing, hashes and Profile validation; the byte persistence layer is unchanged. Current State V1 remains 160 bytes and History V1 remains 336 bytes, with unchanged magic, versions and layout.
 
-For current generation N, a steady history has exactly min(N-1, 3) entries: N-1, N-2, N-3, stopping at generation 1. Generation 1 permits absent history or an existing valid empty history. Missing history at N>1 returns STATE_MISSING on Force; an existing empty/incomplete/gapped window returns STATE_CORRUPT. Project IDs must match byte-for-byte. Future generations and same-generation conflicting Profiles return STATE_CORRUPT.
+For current generation N, a steady history has exactly min(N-1, 3) entries: N-1, N-2, N-3, stopping at generation 1. Generation 1 permits absent history or an existing valid empty history. The private managed validator diagnoses absent required history as STATE_MISSING and empty/incomplete/gapped windows as STATE_CORRUPT. Stage 6 Force attempts legitimate repair and returns UNRECOVERABLE if no mutation-safe state can be reconstructed. Project IDs must match byte-for-byte. Future generations and same-generation conflicting Profiles return STATE_CORRUPT.
 
 A safe transitional overlap has exactly min(N, 3) entries: N, N-1, N-2, stopping at generation 1. Entry 0 must match both current generation and all 64 Profile bytes. The private validator reports steady/overlap; the existing history merge consumes that classification and includes an overlap only once. Incomplete overlap windows are rejected. Profiles may repeat across different, nonadjacent generations; there is no global Profile uniqueness rule.
 
-The generic History V1 parser continues to accept strictly descending, structurally valid non-contiguous generations such as 7,5,3. The managed validator rejects that history for current generation 8. Invalid sets leave current/history bytes unchanged, with no owned persistence temp left behind. Stage 5.2 adds detection, not repair or recovery. The completed Stage 5 locking and crash/fault tests are described below; automatic recovery remains Stage 6.
+The generic History V1 parser continues to accept strictly descending, structurally valid non-contiguous generations such as 7,5,3. The managed validator rejects that history for current generation 8. Invalid sets leave current/history bytes unchanged, with no owned persistence temp left behind. Stage 5.2 adds detection, not repair or recovery. Stage 5 locking and crash/fault tests are described below; completed Stage 6 adds the recovery policy in RECOVERY_V1.md.
 
 ### Stage 5 completed: locking and tested failure windows
 
@@ -398,4 +398,8 @@ Verified same-directory replacement, FlushFileBuffers, and MOVEFILE_WRITE_THROUG
 
 Directory durability limitation: the local Windows probe could open and flush a directory with GENERIC_READ | GENERIC_WRITE and FILE_FLAG_BACKUP_SEMANTICS; read-only directory flush failed with ERROR_ACCESS_DENIED. This observation does not establish a portable directory-metadata durability contract across Windows filesystems. No mandatory directory-handle flush or privileged volume flush is added: it would introduce additional access/compatibility requirements without proving transactional or controller-level durability. File-level flush and write-through replacement are retained. See [FlushFileBuffers](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-flushfilebuffers) and [directory handles](https://learn.microsoft.com/en-us/windows/win32/fileio/obtaining-a-handle-to-a-directory).
 
-Stage 5 is complete within these tested Windows persistence guarantees. There are no redundant copies, ProgramData/AppData/Registry storage or automatic recovery. Stage 6 is next; Stage 7 release work remains later.
+Stage 5 is complete within these tested Windows persistence guarantees. Stage 6 now adds per-user LocalAppData redundancy and automatic recovery; see RECOVERY_V1.md. No ProgramData or Registry copies are implemented. Stage 7 remains next.
+
+### Stage 6 redundancy and recovery
+
+Valid project current remains highest authority. Missing/corrupt current in an existing container triggers exclusive-lock recovery from exact LocalAppData current, then validated project/backup history. A fresh container absence still initializes a new identity. Normal open can remain available with unrepaired history; Force requires a mutation-safe set or returns OBSCURA64_UNRECOVERABLE. Existing State/History binary formats are unchanged. See [RECOVERY_V1.md](RECOVERY_V1.md) for identity conflict rules, partial recovery, path-local mirrors, repair ordering, and rollback limitations. Stage 6 is complete; Stage 7 remains next.

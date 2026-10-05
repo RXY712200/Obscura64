@@ -262,7 +262,7 @@ static int test_history_relationships(const char *path_utf8)
         }
         RCHECK(rehash(blob, 304) && file_bytes(current_path, current_blob, 160, 1) &&
             file_bytes(history_path, blob, 336, 1), "correct SHA on relation/order fixture");
-        RCHECK(obscura64_force_reinitialize(path_utf8, &context) == OBSCURA64_STATE_CORRUPT && context == NULL,
+        RCHECK(obscura64_force_reinitialize(path_utf8, &context) == OBSCURA64_UNRECOVERABLE && context == NULL,
             "same-generation conflict/future/bad order/generic duplicate rejected");
         RCHECK(file_bytes(current_path, current_after, 160, 0) && memcmp(current_blob, current_after, 160) == 0 &&
             file_bytes(history_path, after, 336, 0) && memcmp(blob, after, 336) == 0,
@@ -272,7 +272,7 @@ static int test_history_relationships(const char *path_utf8)
     memset(&history, 0, sizeof(history)); memcpy(history.project_id, state.project_id, 16);
     RCHECK(obscura64_history_serialize(&history, blob) == OBSCURA64_CORE_STATUS_SUCCESS &&
         file_bytes(current_path, current_blob, 160, 1) && file_bytes(history_path, blob, 336, 1), "existing count zero fixture");
-    RCHECK(obscura64_force_reinitialize(path_utf8, &context) == OBSCURA64_STATE_CORRUPT && context == NULL,
+    RCHECK(obscura64_force_reinitialize(path_utf8, &context) == OBSCURA64_UNRECOVERABLE && context == NULL,
         "generation five with empty history rejected");
     RCHECK(file_bytes(history_path, after, 336, 0) && memcmp(blob, after, 336) == 0 &&
         file_bytes(current_path, current_after, 160, 0) && memcmp(current_blob, current_after, 160) == 0,
@@ -343,7 +343,7 @@ static int test_force(void)
     RCHECK(filename(extra_path, projects[1], L"\\.obscura64") && GetFileAttributesW(extra_path) == INVALID_FILE_ATTRIBUTES,
         "Force leaves missing container absent");
     RCHECK(filename(extra_path, projects[2], L"\\.obscura64") && CreateDirectoryW(extra_path, NULL), "empty state container");
-    RCHECK(obscura64_force_reinitialize(utf8[2], &new_context) == OBSCURA64_STATE_MISSING && new_context == NULL,
+    RCHECK(obscura64_force_reinitialize(utf8[2], &new_context) == OBSCURA64_UNRECOVERABLE && new_context == NULL,
         "missing current rejected");
     RCHECK(obscura64_open(utf8[0], &old_context) == OBSCURA64_OK, "first initialization");
     RCHECK(file_bytes(current_path, before, 160, 0) &&
@@ -415,14 +415,14 @@ static int test_force(void)
 
     memcpy(history_blob, saved_history, 336); history_blob[72] ^= 1;
     RCHECK(file_bytes(history_path, history_blob, 336, 1), "corrupt history fixture");
-    RCHECK(obscura64_force_reinitialize(utf8[0], &new_context) == OBSCURA64_STATE_CORRUPT && new_context == NULL,
+    RCHECK(obscura64_force_reinitialize(utf8[0], &new_context) == OBSCURA64_UNRECOVERABLE && new_context == NULL,
         "corrupt history rejected");
     RCHECK(file_bytes(current_path, after, 160, 0) && memcmp(before, after, 160) == 0, "corrupt history leaves current unchanged");
     RCHECK(file_bytes(history_path, history_blob, 336, 0) && history_blob[72] == (unsigned char)(saved_history[72] ^ 1),
         "corrupt history not overwritten");
     memcpy(history_blob, saved_history, 336); history_blob[32] ^= 1; history_blob[33] |= 1;
     RCHECK(rehash(history_blob, 304) && file_bytes(history_path, history_blob, 336, 1), "different valid history identity fixture");
-    RCHECK(obscura64_force_reinitialize(utf8[0], &new_context) == OBSCURA64_STATE_CORRUPT && new_context == NULL,
+    RCHECK(obscura64_force_reinitialize(utf8[0], &new_context) == OBSCURA64_UNRECOVERABLE && new_context == NULL,
         "different history Project ID rejected");
     RCHECK(file_bytes(current_path, after, 160, 0) && memcmp(before, after, 160) == 0, "foreign identity leaves current unchanged");
     RCHECK(file_bytes(history_path, saved_history, 336, 1), "restore test history");
@@ -467,11 +467,15 @@ static int test_force(void)
     memcpy(before, after, 160);
 
     memcpy(after, before, 160); after[70] ^= 1;
+    RCHECK(file_bytes(history_path, saved_history, 336, 0), "save named recovery history before no-source test");
+    memcpy(history_blob, saved_history, 336); history_blob[80] ^= 1;
+    RCHECK(file_bytes(history_path, history_blob, 336, 1), "disable named history fallback for no-source test");
     RCHECK(file_bytes(current_path, after, 160, 1), "corrupt current fixture");
-    RCHECK(obscura64_force_reinitialize(utf8[0], &new_context) == OBSCURA64_STATE_CORRUPT && new_context == NULL,
-        "corrupt current never repaired");
+    RCHECK(obscura64_force_reinitialize(utf8[0], &new_context) == OBSCURA64_UNRECOVERABLE && new_context == NULL,
+        "corrupt current without recovery sources rejected");
     RCHECK(file_bytes(current_path, after, 160, 0) && after[70] == (unsigned char)(before[70] ^ 1), "corrupt current unchanged");
     RCHECK(file_bytes(current_path, before, 160, 1), "restore current fixture");
+    RCHECK(file_bytes(history_path, saved_history, 336, 1), "restore owned history fixture");
     RCHECK(obscura64_state_deserialize(before, 160, &state) == OBSCURA64_CORE_STATUS_SUCCESS, "overflow baseline");
     state.generation = UINT64_MAX;
     RCHECK(obscura64_state_serialize(&state, before) == OBSCURA64_CORE_STATUS_SUCCESS && file_bytes(current_path, before, 160, 1) &&
