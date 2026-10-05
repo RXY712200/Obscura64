@@ -1,0 +1,64 @@
+name: Feature request
+description: Propose a focused improvement or design discussion
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obscura64 is reversible obfuscation, not encryption.
+        Major architectural changes need discussion before implementation; V1 formats, Profiles, and Provider ABI are stable boundaries.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Explain the concrete need and who encounters it.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the smallest useful improvement.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Public API impact
+      description: Include effects on current C and C++ callers.
+    validations:
+      required: true
+  - type: textarea
+    id: format-impact
+    attributes:
+      label: Binary and file-format impact
+      description: Include State, History, Managed Payload, and frozen Profile Library identity.
+    validations:
+      required: true
+  - type: textarea
+    id: provider-impact
+    attributes:
+      label: Provider ABI impact
+    validations:
+      required: true
+  - type: dropdown
+    id: stable-v1
+    attributes:
+      label: Can this preserve stable V1 formats and Provider ABI 1?
+      options:
+        - "Yes"
+        - "No; an explicitly versioned design is needed"
+        - "Unknown; design discussion needed"
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/RXY712200/Obscura64/tree/main/docs
+    about: Read the supported behavior, integration instructions, formats, and recovery limits.
+  - name: Development Log, Known Issues & Roadmap
+    url: https://github.com/RXY712200/Obscura64/issues/1
+    about: Check current status, validation gaps, and maintenance history.

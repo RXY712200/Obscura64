@@ -47,16 +47,19 @@ no known release-blocking defect was found in the verified environment.
 ## Publication verification
 
 - [x] Stage 7 diff and development evidence reviewed; final release authorized.
-- [ ] Commit Stage 7 and push main normally.
-- [ ] Verify GitHub main matches the reviewed commit.
-- [ ] Create the authorized annotated `v1.0.0` tag and verify its target.
-- [ ] Create GitHub Release using RELEASE_NOTES_V1.0.0.md.
-- [ ] Verify GitHub source archives contain public header, sources, tests,
+- [x] Release source commit `f255d84cf08a1c02d0ef2d5b9eb79c9719a36e25`
+      created and pushed to main; remote main matched the reviewed commit at publication.
+- [x] Annotated `v1.0.0` tag created and verified to point exactly to that commit.
+- [x] [GitHub Release v1.0.0](https://github.com/RXY712200/Obscura64/releases/tag/v1.0.0)
+      published from the existing tag, using the complete release notes, without
+      development binary assets.
+- [x] GitHub-generated source ZIP and tar.gz available; source ZIP contains the
+      public header, sources, tests,
       examples, documentation, CLI source and frozen artifacts.
-- [ ] Recheck canonical library SHA and candidate SHA from downloaded archives.
+- [x] Frozen library and candidate sizes/SHA-256 verified from the downloaded
+      tagged source ZIP; both match the values recorded above.
 - [x] Final pre-commit audit: no credentials, runtime state, caches or local build binaries.
 
-No release binary is required unless intentionally built and validated later.
-Development and release preparation are complete. Publication steps remain
-unchecked in this source commit because main/tag/Release creation and remote
-verification follow the commit; their outcome is recorded in the release report.
+No release binary was required or attached. This checklist was updated in a
+post-release repository-maintenance commit to record publication results. That
+maintenance commit is **not part of the immutable v1.0.0 tagged source tree**.

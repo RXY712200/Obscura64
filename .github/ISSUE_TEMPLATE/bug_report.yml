@@ -1,0 +1,78 @@
+name: Bug report
+description: Report a reproducible defect or technical problem
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obscura64 is reversible obfuscation, not encryption.
+        For security-sensitive findings, use the repository security policy rather than a public report.
+        Remove credentials, secrets, private project state, and personal data from reproductions and logs.
+  - type: input
+    id: version
+    attributes:
+      label: Obscura64 version, tag, or commit
+      placeholder: v1.0.0 or a full commit SHA
+    validations:
+      required: true
+  - type: input
+    id: toolchain
+    attributes:
+      label: Compiler and toolchain
+      description: Include compiler version and build method.
+    validations:
+      required: true
+  - type: input
+    id: architecture
+    attributes:
+      label: Architecture
+      placeholder: i686 or x86_64
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+    validations:
+      required: true
+  - type: input
+    id: component
+    attributes:
+      label: Affected API or component
+      placeholder: Managed decode, project open, recovery CLI, or build system
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest reliable sequence that triggers the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include status values, exit codes, or failure symptoms.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Minimal reproduction and relevant logs
+      description: Paste sanitized source, build commands, and relevant output. Do not attach private runtime state.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Data review
+      options:
+        - label: I removed secrets and private data from this report and its attachments.
+          required: true
+        - label: I checked existing Issues for this problem.

@@ -1,5 +1,10 @@
 # Obscura64
 
+[![Release: v1.0.0](https://img.shields.io/badge/release-v1.0.0-blue)](https://github.com/RXY712200/Obscura64/releases/tag/v1.0.0)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+![Platform: Windows](https://img.shields.io/badge/platform-Windows-blue)
+![Language: C11](https://img.shields.io/badge/language-C11-blue)
+
 **Obscura64 1.0.0** — Windows C11 source release.
 
 Obscura64 is a lightweight reversible obfuscation library for software-internal local data. It raises the effort needed for casual inspection and manual editing: fields such as `coins=1000`, `level=20`, and `unlock=0` become encoded bytes that are less immediately readable.
@@ -17,6 +22,16 @@ Obscura64 is **NOT encryption**. It is not designed to resist professional rever
 - Explicit Force Reinitialize with preservation of the latest three historical Profiles.
 - Verified persistence, process coordination, LocalAppData redundancy and automatic state recovery.
 - Managed Payload validation and a separate exhaustive builtin Profile recovery CLI.
+
+## Documentation
+
+- [Documentation index](docs/README.md)
+- [V1 specification](docs/OBSCURA64_V1_SPEC.md)
+- [Managed Payload V1](docs/MANAGED_PAYLOAD_V1.md)
+- [Recovery policy and limits](docs/RECOVERY_V1.md)
+- [Changelog](CHANGELOG.md) and [v1.0.0 release notes](docs/RELEASE_NOTES_V1.0.0.md)
+- [Published v1.0.0 Release](https://github.com/RXY712200/Obscura64/releases/tag/v1.0.0)
+- [Issue #1 — Development Log, Known Issues & Roadmap](https://github.com/RXY712200/Obscura64/issues/1)
 
 ## Quick Start (Managed Payload recommended)
 
@@ -142,7 +157,7 @@ V1 development stages and release preparation are complete. Frozen Profile Libra
 
 File-helper APIs, streaming and encryption are not implemented. Optional examples can be built with `OBSCURA64_BUILD_EXAMPLES=ON`; this is not required for source integration.
 
-See [V1 specification](docs/OBSCURA64_V1_SPEC.md), [current format](docs/PROJECT_STATE_V1.md), [history format](docs/PROJECT_HISTORY_V1.md), [changelog](CHANGELOG.md), [release notes](docs/RELEASE_NOTES_V1.0.0.md), and [release checklist](docs/RELEASE_CHECKLIST_V1.md). The verified environment is MinGW GCC/G++ 10.2.0, i686 Windows. MSVC, Clang, x64 and CMake/CTest execution are not claimed.
+See [current format](docs/PROJECT_STATE_V1.md), [history format](docs/PROJECT_HISTORY_V1.md), and the [release checklist](docs/RELEASE_CHECKLIST_V1.md). The verified environment is MinGW GCC/G++ 10.2.0, i686 Windows. MSVC, Clang, x64 and CMake/CTest execution are not claimed.
 
 ## License
 
