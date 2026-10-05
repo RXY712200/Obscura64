@@ -5,8 +5,8 @@
 
 #include <stddef.h>
 
-#define OBSCURA64_VERSION_MAJOR 0
-#define OBSCURA64_VERSION_MINOR 1
+#define OBSCURA64_VERSION_MAJOR 1
+#define OBSCURA64_VERSION_MINOR 0
 #define OBSCURA64_VERSION_PATCH 0
 #define OBSCURA64_PROFILE_LIBRARY_VERSION 1
 #define OBSCURA64_PROFILE_SIZE 64
@@ -34,6 +34,20 @@ typedef enum obscura64_status {
 } obscura64_status;
 
 typedef struct obscura64_context obscura64_context;
+
+/* Common contracts: contexts are owned by the caller and released with
+ * obscura64_context_destroy; constructors/open/Force clear *out_context on
+ * failure. Paths are NUL-terminated UTF-8 existing project directories.
+ * Profiles are explicit-length 64-byte permutations, not necessarily strings.
+ * All byte buffers use explicit lengths; a NULL input is allowed only at zero
+ * length. Length/output-pointer arguments are required. Allocating results use
+ * obscura64_free, never context_destroy; failures clear pointer and length.
+ * Raw empty results are NULL/zero. Caller buffers are unchanged on failure;
+ * BUFFER_TOO_SMALL reports required length, other failures report zero.
+ * NULL output with capacity zero is a size query (empty output succeeds).
+ * Raw Codec cannot detect use of the wrong Profile; prefer Managed for new data.
+ * A supplied Provider is copied, but its user_data remains caller-owned.
+ */
 
 /*
  * Advanced codec strategy interface. Every callback receives user_data and
@@ -168,6 +182,26 @@ obscura64_status obscura64_decode_alloc(
 
 /* Release any non-NULL buffer returned by an obscura64_*_alloc function. */
 void obscura64_free(void *ptr);
+
+/* Managed V1 envelope above the context Provider. SHA detects corruption/wrong
+ * Profile, not attacker authentication. Explicit lengths; no NUL appended.
+ * Empty input encodes a nonempty envelope. Size queries validate decoded data.
+ * Caller buffers stay unchanged on failure. BUFFER_TOO_SMALL reports required
+ * output_len; other failures report zero. NULL output/capacity zero queries size.
+ * Alloc outputs use obscura64_free; failures clear pointer/length. Empty allocating
+ * decode succeeds with NULL/zero, without malloc(0). */
+obscura64_status obscura64_managed_encoded_size(const obscura64_context *context,
+    size_t input_len, size_t *encoded_size);
+obscura64_status obscura64_managed_decoded_size(const obscura64_context *context,
+    const char *encoded, size_t encoded_len, size_t *decoded_size);
+obscura64_status obscura64_managed_encode(const obscura64_context *context,
+    const void *input, size_t input_len, char *output, size_t output_capacity, size_t *output_len);
+obscura64_status obscura64_managed_decode(const obscura64_context *context,
+    const char *encoded, size_t encoded_len, void *output, size_t output_capacity, size_t *output_len);
+obscura64_status obscura64_managed_encode_alloc(const obscura64_context *context,
+    const void *input, size_t input_len, char **output, size_t *output_len);
+obscura64_status obscura64_managed_decode_alloc(const obscura64_context *context,
+    const char *encoded, size_t encoded_len, void **output, size_t *output_len);
 
 /* Return a static, read-only English status string. */
 const char *obscura64_status_string(obscura64_status status);

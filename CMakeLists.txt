@@ -24,6 +24,8 @@ add_library(obscura64 STATIC
     src/obscura64_lock.c
     src/obscura64_redundancy.c
     src/obscura64_recovery.c
+    src/obscura64_managed_payload.c
+    src/obscura64_disaster.c
 )
 
 target_include_directories(obscura64
@@ -333,3 +335,54 @@ foreach(stage6_test redundancy recovery)
     endif()
     add_test(NAME obscura64_${stage6_test} COMMAND obscura64_test_${stage6_test})
 endforeach()
+
+add_executable(obscura64_recover tools/obscura64_recover.c)
+target_include_directories(obscura64_recover PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(obscura64_recover PRIVATE obscura64)
+if(MINGW)
+    target_link_options(obscura64_recover PRIVATE -municode)
+endif()
+
+foreach(stage7_test managed_payload recover_tool)
+    add_executable(obscura64_test_${stage7_test} tests/test_obscura64_${stage7_test}.c)
+    target_include_directories(obscura64_test_${stage7_test} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(obscura64_test_${stage7_test} PRIVATE obscura64_test_support)
+    if(MSVC)
+        target_compile_options(obscura64_test_${stage7_test} PRIVATE /W4)
+    endif()
+endforeach()
+add_test(NAME obscura64_managed_payload COMMAND obscura64_test_managed_payload)
+add_test(NAME obscura64_recover_tool COMMAND obscura64_test_recover_tool $<TARGET_FILE:obscura64_recover>)
+
+add_executable(obscura64_test_disaster tests/test_obscura64_disaster.c ${OBSCURA64_TEST_SOURCES})
+target_include_directories(obscura64_test_disaster PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_compile_definitions(obscura64_test_disaster PRIVATE OBSCURA64_DISASTER_TESTING OBSCURA64_REDUNDANCY_TESTING)
+add_executable(obscura64_test_managed_default tests/test_obscura64_managed_default.c ${OBSCURA64_TEST_SOURCES})
+target_include_directories(obscura64_test_managed_default PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_compile_definitions(obscura64_test_managed_default PRIVATE OBSCURA64_REDUNDANCY_TESTING
+    OBSCURA64_DEFAULT_PROVIDER_SYMBOL=obscura64_test_managed_default_provider)
+foreach(target obscura64_test_disaster obscura64_test_managed_default)
+    if(WIN32)
+        target_link_libraries(${target} PRIVATE bcrypt shell32 ole32 uuid)
+    endif()
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4)
+    endif()
+endforeach()
+if(MSVC)
+    target_compile_options(obscura64_recover PRIVATE /W4)
+endif()
+add_test(NAME obscura64_disaster COMMAND obscura64_test_disaster)
+add_test(NAME obscura64_managed_default COMMAND obscura64_test_managed_default)
+
+option(OBSCURA64_BUILD_EXAMPLES "Build public API examples" OFF)
+if(OBSCURA64_BUILD_EXAMPLES)
+    foreach(example managed_quickstart raw_codec)
+        add_executable(obscura64_${example} examples/${example}.c)
+        target_link_libraries(obscura64_${example} PRIVATE obscura64)
+        if(MSVC)
+            target_compile_options(obscura64_${example} PRIVATE /W4)
+        endif()
+    endforeach()
+endif()

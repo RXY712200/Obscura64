@@ -104,9 +104,8 @@ their own statuses.
 
 Exact-current recovery preserves Profile/generation and can decode data produced
 with that Profile. History fallback can roll back Profile/generation; data encoded
-only with a lost newer Profile may not decode after rollback. Stage 7 broader
-Profile discovery using Managed Payload validation is planned, not implemented.
-Recovery never scans 4096 Profiles, treats readability as evidence, or uses temp
+only with a lost newer Profile may not decode after rollback. Stage 7 provides separate manual Profile discovery using Managed Payload validation.
+Normal automatic recovery never scans 4096 Profiles, treats readability as evidence, or uses temp
 files as sources.
 
 SHA-256 detects accidental corruption, not attacker-resistant authentication. A
@@ -121,5 +120,22 @@ Fault controls remain under `OBSCURA64_TESTING`. Neither switch is a public API 
 a production runtime option. All generated test files are beneath owned Temp
 roots; recursive cleanup refuses paths outside them and refuses reparse points.
 
-Stage 6 is complete after the full GCC regression and invariant audit. Stage 7
-remains next. No release or tag is created by this stage.
+## Manual disaster recovery (Stage 7 complete)
+
+`obscura64_recover <encoded-input-file> <new-decoded-output-file>` is a separate
+Unicode Windows CLI. Its private scanner tries all 4096 frozen builtin Profiles,
+uses canonical Managed Payload V1 header/length/reserved/SHA validation, and
+accepts exactly one valid match. No match or multiple matches fail without output.
+No readability heuristic is used. Exact input bytes are read; no newline trimming
+or encoded string termination is assumed. Existing output paths are never
+replaced (CREATE_NEW). The tool prints the recovered ID and full 64-byte Profile.
+
+It recovers payload/Profile only, without calling project open or modifying
+current, history, LocalAppData, identity or generation. It does not reconstruct
+lost Project ID/history or silently select a new identity. Raw Codec and arbitrary
+custom Providers are unsupported by the builtin scan. Managed APIs still support
+custom Providers when the matching Provider and context are supplied directly.
+This separate exhaustive scan is never invoked by normal open or Force.
+
+Stage 6 and Stage 7 development and V1 release preparation are complete.
+Publication verification is tracked in RELEASE_CHECKLIST_V1.md.

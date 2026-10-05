@@ -199,4 +199,26 @@ obscura64_status obscura64_project_open_internal(
     const obscura64_provider *provider,
     obscura64_context **out_context);
 
+obscura64_status obscura64_managed_sha256(const unsigned char *data, size_t length, unsigned char digest[32]);
+obscura64_status obscura64_managed_payload_build(const void *data, size_t length, unsigned char **envelope, size_t *size);
+obscura64_status obscura64_managed_payload_parse(const unsigned char *envelope, size_t size, const unsigned char **payload, size_t *length);
+typedef enum obscura64_disaster_status {
+    OBSCURA64_DISASTER_SUCCESS, OBSCURA64_DISASTER_NOT_FOUND,
+    OBSCURA64_DISASTER_AMBIGUOUS, OBSCURA64_DISASTER_ERROR
+} obscura64_disaster_status;
+typedef struct obscura64_disaster_result {
+    uint16_t profile_id;
+    unsigned char profile[64];
+    void *payload;
+    size_t payload_size;
+    size_t attempts;
+} obscura64_disaster_result;
+/* Result is reset on entry. Only SUCCESS owns payload (free with obscura64_free);
+ * release a previous successful result before reusing it. No project mutation. */
+obscura64_disaster_status obscura64_disaster_scan(const char *encoded, size_t size, obscura64_disaster_result *result);
+#ifdef OBSCURA64_DISASTER_TESTING
+obscura64_disaster_status obscura64_disaster_scan_candidates(const char *encoded, size_t size,
+    const uint16_t *ids, size_t count, obscura64_disaster_result *result);
+#endif
+
 #endif /* OBSCURA64_INTERNAL_H */

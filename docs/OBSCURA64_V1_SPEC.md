@@ -1,10 +1,10 @@
 # Obscura64 — V1 Specification
 
-**Status:** Stage 0 Design Freeze  
+**Status:** V1 development complete; Obscura64 1.0.0
 **Platform:** Windows only  
 **Implementation language:** C
 
-**Module positioning:** Obscura64 is a C language module that other Windows C projects can call directly. One of its design priorities is simple calling. Ordinary callers should eventually mainly need:
+**Module positioning:** Obscura64 is a C language module that other Windows C projects can call directly. One of its design priorities is simple calling. Ordinary callers include:
 
 ```c
 #include "obscura64.h"
@@ -13,13 +13,13 @@
 and a simple flow similar to:
 
 ```text
-open/init
-encode
-decode
-close
+obscura64_open
+obscura64_managed_encode_alloc
+obscura64_managed_decode_alloc
+obscura64_free / obscura64_context_destroy
 ```
 
-This records a usage-complexity goal only; it does not define final function signatures.
+The public header defines the final V1 signatures and ownership contracts.
 
 ## 1. Module Purpose
 
@@ -112,7 +112,7 @@ It is only an encoding-data Alphabet.
 - Profile order 0 through 4095 became meaningful when the candidate was frozen in Stage 2.3.
 - The canonical library representation is exactly 262144 bytes: the 64 bytes of each Profile concatenated in ID order.
 - Canonical SHA-256: `8842cc4aa32bcb300937835f72aaacfd088568d1bfecd01811603c4f16e7280a`.
-- Default Profile Library V1 will be embedded with the module distribution rather than requiring ordinary callers to manage a separate runtime Profile Library file.
+- Default Profile Library V1 is embedded with the module distribution rather than requiring ordinary callers to manage a separate runtime Profile Library file.
 - Ordinary users do not need an external Profile Library file.
 - The library is not treated as secret.
 - Its exact generated representation was frozen in Stage 2.3.
@@ -158,15 +158,15 @@ Ordinary use must not require installing an additional third-party runtime libra
 - The ordinary public surface is provided through `obscura64.h`; internal implementation headers are not part of the caller-facing API.
 - The context is opaque to callers and owns a copy of the complete 64-byte Profile supplied at construction.
 - Byte input and output use explicit lengths and caller-owned buffers. No NUL terminator is implied for encoded or decoded data.
-- The module creates and destroys its context. Profile persistence and project-level initialization remain later-stage responsibilities; Stage 3.1 does not expose random Profile selection or Profile IDs through the public API.
-- Public operations report a status value. This API boundary does not add file, Provider, history, recovery, or storage behavior.
+- The module creates and destroys its context. Project open and Force orchestrate persistence privately; random Profile selection and Profile IDs are not ordinary public APIs.
+- Public operations report a status value. Provider, project persistence and recovery ownership remain separate from codec transformation.
 
 ### Stage 3.2 Buffer and Allocation Principles
 
 - Caller-buffer encode/decode APIs remain available for advanced callers and callers avoiding additional allocations.
 - Allocating convenience APIs are available for ordinary use. Returned data buffers use module-owned allocation and must be released with `obscura64_free`.
-- Both API styles use explicit lengths. Encoded and decoded results are not NUL-terminated; empty allocating operations succeed with a `NULL` buffer and length zero.
-- Normal project-level open/init remains deferred until project persistence is implemented in Stage 4.
+- Both API styles use explicit lengths. Encoded and decoded results are not NUL-terminated; empty Raw allocating operations succeed with a `NULL` buffer and length zero. Empty Managed encode instead includes its envelope.
+- Normal project-level open is implemented with project state, history and automatic recovery.
 
 ## 7. Raw Data Encoding
 
@@ -191,7 +191,7 @@ Binary data containing `0x00` must be supported. The implementation must not use
 - `=` is not part of any Profile's 64-character permutation.
 - Profiles map only values 0 through 63.
 - When padding is required, V1 encoded output uses the standard Base64-style trailing `=` rule.
-- Specific strict decoding rules will be completed in Stage 1.3.
+- Strict canonical decoding rules are implemented as specified below.
 
 ### Strict Raw Decode Rules (Stage 1.3)
 
@@ -204,7 +204,7 @@ Binary data containing `0x00` must be supported. The implementation must not use
 
 ## 8. File Usage Model
 
-Obscura64 is a module, not a transparent file system. V1 does not attempt to intercept or replace Windows/C standard-library `fopen`, `fread`, or `fwrite` calls. If a caller wants on-disk file contents to remain in Obscura64 form, it must explicitly use file-helper interfaces provided by Obscura64 or call the encoding API first.
+Obscura64 is a module, not a transparent file system. V1 does not attempt to intercept or replace Windows/C standard-library `fopen`, `fread`, or `fwrite` calls. If a caller wants on-disk file contents to remain in Obscura64 form, it must call the encoding API first and perform its own file I/O. V1 has no public file-helper API.
 
 ### Whole-file encoding
 
@@ -282,21 +282,40 @@ It is prohibited to silently generate a new Profile because state is missing or 
 
 ## 13. Disaster Recovery
 
-The complete 4096-Profile Library is mainly for extreme disaster recovery. A normal application must not automatically scan all 4096 Profiles. A future disaster-recovery tool may try Profile 0 through Profile 4095 one by one, but it must have a reliable way to determine which Profile is correct. A candidate must not be considered recovered merely because its decoded output “looks like normal text.”
+The separate manual recovery CLI scans all 4096 frozen builtin Profiles. Normal
+open and Force never invoke this exhaustive scan. Candidate acceptance requires
+exact canonical Managed Payload V1 header, size, reserved bytes and SHA-256;
+readability is never evidence. Zero matches fail, multiple matches fail as
+ambiguous, and only a unique match returns payload plus ID and full Profile.
 
-V1 will later define a Managed Payload Envelope that includes enough information to validate candidate data:
+Raw Codec is binary-safe transformation without wrong-Profile validation.
+Managed Codec adds the canonical envelope above the context Provider and is the
+recommended interface for new application data. Custom Providers work with
+Managed APIs, but arbitrary custom transports are not supported by builtin scan.
 
-- Magic
-- Version
-- Length
-- Integrity information
+Managed Payload V1 has a 32-byte header, payload, and 32-byte trailing SHA:
 
-Raw Codec and Managed Codec must be distinct:
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 8 | Magic OB64MP01 |
+| 8 | 2 | Little-endian format version 1 |
+| 10 | 2 | Little-endian header size 32 |
+| 12 | 4 | Flags zero |
+| 16 | 8 | Little-endian payload length |
+| 24 | 8 | Reserved zero |
+| 32 | payload length | Application bytes |
+| 32 + payload length | 32 | SHA-256 over header and payload |
 
-- **Raw Codec:** only handles bytes ↔ Obscura64.
-- **Managed Codec:** adds a structured Envelope to support reliable validation and disaster recovery.
+Total size is payload length + 64. Empty payload remains a valid 64-byte envelope.
+Strict decode rejects overflow, size mismatch, unknown fields and digest damage.
+SHA is corruption validation, not attacker-resistant authentication. Detailed
+contracts and failure atomicity are in [MANAGED_PAYLOAD_V1.md](MANAGED_PAYLOAD_V1.md).
 
-The specific format will be frozen in a later stage.
+`obscura64_recover <encoded-input-file> <new-decoded-output-file>` reads exact
+encoded bytes using Unicode Windows paths, creates output only after a unique
+match, and never overwrites an existing path. It does not modify project state,
+recover identity/history, or silently create a new identity. Recovery limits are
+in [RECOVERY_V1.md](RECOVERY_V1.md).
 
 ## 14. Provider Principle
 
@@ -310,8 +329,8 @@ V1 reliability goals:
 - Two processes initializing simultaneously must not create two different project identities.
 - An interrupted state write must not easily damage the only usable state.
 - State must be verifiable after writing.
-- Later implementation should use temp write + verify + atomic replace.
-- Later implementation should provide necessary interprocess locking.
+- Persistence uses verified temp write + verified replacement.
+- Interprocess coordination uses Windows kernel byte-range locks.
 - An invalid backup must not overwrite valid primary state.
 - When recovery is impossible, the module must not secretly create a new identity.
 
@@ -330,7 +349,7 @@ Stage 5 Windows persistence and Stage 6 LocalAppData recovery details are docume
 - No heavy approach such as TPM, hidden partitions, or unusual drive letters to hide the Profile Library.
 - No requirement to support Linux or macOS.
 
-## 17. Stage Plan
+## 17. Completed V1 Stage Plan
 
 ### Stage 4.1 Project State V1 format
 
@@ -339,7 +358,7 @@ Stage 5 Windows persistence and Stage 6 LocalAppData recovery details are docume
 - Generation begins at 1 and changes only when a future Force Reinitialize operation creates a new generation.
 - State V1 uses a canonical 160-byte representation with explicit little-endian integer fields and SHA-256 over bytes 0 through 127.
 - The SHA-256 digest detects corruption; it is not attacker-resistant authentication because a writer can recompute it.
-- Stage 4.1 implements the in-memory format only. Disk persistence is not implemented.
+- Stage 4.1 introduced the in-memory format. Completed Stages 4–6 implement disk persistence and recovery.
 
 ### Stage 4.2 Project open
 
@@ -358,7 +377,9 @@ The fixed V1 major stages are:
 5. **Stage 4 — project state and three-generation history**
 6. **Stage 5 — reliable state persistence**
 7. **Stage 6 — redundancy and automatic recovery**
-8. **Stage 7 — disaster recovery, full testing and release**
+8. **Stage 7 — Managed Payload, disaster recovery, full testing and V1 release preparation**
+
+All eight stages (0–7) are implemented and development-tested. Source version macros are 1.0.0; Provider ABI and Profile Library version remain 1. Release preparation is complete. See RELEASE_CHECKLIST_V1.md for publication verification steps.
 
 V1 is fixed at these eight major stages. Do not continue adding Stage 8, 9, 10, and so on indefinitely unless a genuine structural error is found. If a new need arises later, prefer V2 rather than indefinitely expanding V1.
 
@@ -398,8 +419,8 @@ Verified same-directory replacement, FlushFileBuffers, and MOVEFILE_WRITE_THROUG
 
 Directory durability limitation: the local Windows probe could open and flush a directory with GENERIC_READ | GENERIC_WRITE and FILE_FLAG_BACKUP_SEMANTICS; read-only directory flush failed with ERROR_ACCESS_DENIED. This observation does not establish a portable directory-metadata durability contract across Windows filesystems. No mandatory directory-handle flush or privileged volume flush is added: it would introduce additional access/compatibility requirements without proving transactional or controller-level durability. File-level flush and write-through replacement are retained. See [FlushFileBuffers](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-flushfilebuffers) and [directory handles](https://learn.microsoft.com/en-us/windows/win32/fileio/obtaining-a-handle-to-a-directory).
 
-Stage 5 is complete within these tested Windows persistence guarantees. Stage 6 now adds per-user LocalAppData redundancy and automatic recovery; see RECOVERY_V1.md. No ProgramData or Registry copies are implemented. Stage 7 remains next.
+Stage 5 is complete within these tested Windows persistence guarantees. Stage 6 now adds per-user LocalAppData redundancy and automatic recovery; see RECOVERY_V1.md. No ProgramData or Registry copies are implemented. Stage 7 Managed Payload and manual disaster recovery are complete; V1 release preparation is complete.
 
 ### Stage 6 redundancy and recovery
 
-Valid project current remains highest authority. Missing/corrupt current in an existing container triggers exclusive-lock recovery from exact LocalAppData current, then validated project/backup history. A fresh container absence still initializes a new identity. Normal open can remain available with unrepaired history; Force requires a mutation-safe set or returns OBSCURA64_UNRECOVERABLE. Existing State/History binary formats are unchanged. See [RECOVERY_V1.md](RECOVERY_V1.md) for identity conflict rules, partial recovery, path-local mirrors, repair ordering, and rollback limitations. Stage 6 is complete; Stage 7 remains next.
+Valid project current remains highest authority. Missing/corrupt current in an existing container triggers exclusive-lock recovery from exact LocalAppData current, then validated project/backup history. A fresh container absence still initializes a new identity. Normal open can remain available with unrepaired history; Force requires a mutation-safe set or returns OBSCURA64_UNRECOVERABLE. Existing State/History binary formats are unchanged. See [RECOVERY_V1.md](RECOVERY_V1.md) for identity conflict rules, partial recovery, path-local mirrors, repair ordering, and rollback limitations. Stage 6 is complete; Stage 7 Managed Payload and manual disaster recovery are complete; V1 release preparation is complete.

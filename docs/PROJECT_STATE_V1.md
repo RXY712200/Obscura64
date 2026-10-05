@@ -4,7 +4,7 @@
 
 Project State identifies a project instance and carries the Profile needed to continue using that project. It is project-level state, not device identity. The Project ID moves with the project and is not derived from hardware or Windows identity.
 
-Stage 4.1 defines and implements only the in-memory logical state and canonical 160-byte representation. It does not write a state file. Durable and atomic persistence is deferred to a later stage.
+The canonical 160-byte representation introduced in Stage 4.1 remains unchanged. Project persistence, coordination and recovery are implemented; the completed persistence layer is described below.
 
 Stage 4.2 stores the authoritative current state at `<project>/.obscura64/current.state`. It travels with the project directory. Normal open validates and uses an existing state without changing its bytes. An existing `.obscura64` directory without usable `current.state` is not a fresh project. Stage 6 now attempts validated recovery and returns UNRECOVERABLE when no source succeeds; it never silently generates a replacement identity.
 
@@ -51,7 +51,7 @@ Existing contexts retain their old Profile. After Force, callers should destroy 
 
 Force uses the persistent kernel-lock coordination and verified replacement described below. Stage 6 now permits validated history fallback as documented in RECOVERY_V1.md.
 
-No project state file, project path, temporary file, or file replacement is implemented in Stage 4.1. Durable and atomic persistence is deferred to later stages.
+Format serialization is separate from disk I/O. The completed persistence layer is described below.
 
 ### Stage 5.1 verified byte persistence
 
@@ -89,8 +89,8 @@ Verified same-directory replacement, FlushFileBuffers, and MOVEFILE_WRITE_THROUG
 
 Directory durability limitation: the local Windows probe could open and flush a directory with GENERIC_READ | GENERIC_WRITE and FILE_FLAG_BACKUP_SEMANTICS; read-only directory flush failed with ERROR_ACCESS_DENIED. This observation does not establish a portable directory-metadata durability contract across Windows filesystems. No mandatory directory-handle flush or privileged volume flush is added: it would introduce additional access/compatibility requirements without proving transactional or controller-level durability. File-level flush and write-through replacement are retained. See [FlushFileBuffers](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-flushfilebuffers) and [directory handles](https://learn.microsoft.com/en-us/windows/win32/fileio/obtaining-a-handle-to-a-directory).
 
-Stage 5 is complete within these tested Windows persistence guarantees. Stage 6 now adds per-user LocalAppData redundancy and automatic recovery; see RECOVERY_V1.md. No ProgramData or Registry copies are implemented. Stage 7 remains next.
+Stage 5 is complete within these tested Windows persistence guarantees. Stage 6 now adds per-user LocalAppData redundancy and automatic recovery; see RECOVERY_V1.md. No ProgramData or Registry copies are implemented. Stage 7 Managed Payload and manual disaster recovery are complete; V1 release preparation is complete.
 
 ### Stage 6 redundancy and recovery
 
-Valid project current remains highest authority. Missing/corrupt current in an existing container triggers exclusive-lock recovery from exact LocalAppData current, then validated project/backup history. A fresh container absence still initializes a new identity. Normal open can remain available with unrepaired history; Force requires a mutation-safe set or returns OBSCURA64_UNRECOVERABLE. Existing State/History binary formats are unchanged. See [RECOVERY_V1.md](RECOVERY_V1.md) for identity conflict rules, partial recovery, path-local mirrors, repair ordering, and rollback limitations. Stage 6 is complete; Stage 7 remains next.
+Valid project current remains highest authority. Missing/corrupt current in an existing container triggers exclusive-lock recovery from exact LocalAppData current, then validated project/backup history. A fresh container absence still initializes a new identity. Normal open can remain available with unrepaired history; Force requires a mutation-safe set or returns OBSCURA64_UNRECOVERABLE. Existing State/History binary formats are unchanged. See [RECOVERY_V1.md](RECOVERY_V1.md) for identity conflict rules, partial recovery, path-local mirrors, repair ordering, and rollback limitations. Stage 6 is complete; Stage 7 Managed Payload and manual disaster recovery are complete; V1 release preparation is complete.
