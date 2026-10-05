@@ -8,7 +8,7 @@ Stage 4.1 defines and implements only the in-memory logical state and canonical 
 
 Stage 4.2 stores the authoritative current state at `<project>/.obscura64/current.state`. It travels with the project directory. Normal open validates and uses an existing state without changing its bytes. An existing `.obscura64` directory without `current.state` is treated as missing state, not as a fresh project. Corrupt state is never silently replaced.
 
-First-write protection in Stage 4.2 is basic: the writer uses `CREATE_NEW`, writes exactly 160 bytes, flushes, and rereads the result for validation. A concurrent first initializer that loses the create race loads the winner's state. Stronger atomic persistence and full process locking belong to Stage 5.
+First-write protection uses `CREATE_NEW`, writes exactly 160 bytes, flushes, and rereads the result for validation. A concurrent first initializer loads the winner's state. Stage 5 adds kernel coordination and verified replacement; details and tested limits appear below.
 
 ## Logical state
 
@@ -49,7 +49,7 @@ The previous current generation/Profile is committed to `history.state` before c
 
 Existing contexts retain their old Profile. After Force, callers should destroy old contexts when finished and use the newly returned context as the current project context. There is no context registry or automatic destruction.
 
-Force uses a minimal CREATE_NEW `operation.lock` and basic temp-write, flush, reread, replace, final-reread persistence. This does not implement Stage 5's complete locking or crash hardening. History is not currently an automatic recovery source.
+Force uses the persistent kernel-lock coordination and verified replacement described below. History is not currently an automatic recovery source.
 
 No project state file, project path, temporary file, or file replacement is implemented in Stage 4.1. Durable and atomic persistence is deferred to later stages.
 
@@ -61,7 +61,7 @@ Replacement sequence: unique same-directory temp with BCrypt suffix and CREATE_N
 
 First initialization still creates the authoritative file with CREATE_NEW, then writes, flushes, closes and verifies it. A losing initializer reads the winning state using the existing bounded retry behavior; it never overwrites the winner. Force still commits verified history before preparing/replacing current and retains the previous Profile on current replacement failure.
 
-This improves write/replacement reliability but does not prove absolute power-loss durability under every filesystem, device or controller failure. The existing Force operation.lock is unchanged. Full multi-process locking belongs to Stage 5.3; crash/fault simulations belong to Stage 5.4. No automatic recovery is added; that remains Stage 6 work.
+This improves write/replacement reliability but does not prove absolute power-loss durability under every filesystem, device or controller failure. Stage 5.1 originally retained the Force existence lock; it is superseded by the completed kernel coordination described below. No automatic recovery is added; that remains Stage 6 work.
 
 ### Stage 5.2 managed-state consistency
 
@@ -73,4 +73,20 @@ For current generation N, a steady history has exactly min(N-1, 3) entries: N-1,
 
 A safe transitional overlap has exactly min(N, 3) entries: N, N-1, N-2, stopping at generation 1. Entry 0 must match both current generation and all 64 Profile bytes. The private validator reports steady/overlap; the existing history merge consumes that classification and includes an overlap only once. Incomplete overlap windows are rejected. Profiles may repeat across different, nonadjacent generations; there is no global Profile uniqueness rule.
 
-The generic History V1 parser continues to accept strictly descending, structurally valid non-contiguous generations such as 7,5,3. The managed validator rejects that history for current generation 8. Invalid sets leave current/history bytes unchanged, with no owned persistence temp left behind. Stage 5.2 adds detection, not repair or recovery. Full locking remains Stage 5.3; crash/fault simulation remains Stage 5.4; automatic recovery remains Stage 6.
+The generic History V1 parser continues to accept strictly descending, structurally valid non-contiguous generations such as 7,5,3. The managed validator rejects that history for current generation 8. Invalid sets leave current/history bytes unchanged, with no owned persistence temp left behind. Stage 5.2 adds detection, not repair or recovery. The completed Stage 5 locking and crash/fault tests are described below; automatic recovery remains Stage 6.
+
+### Stage 5 completed: locking and tested failure windows
+
+Responsibilities remain separate: State/History modules own binary layouts and structural validation; managed-state owns cross-file consistency; persistence owns exact byte I/O and verified replacement; lock owns Windows coordination; project orchestrates operations. No public API or binary format changed.
+
+The persistent `.obscura64/operation.lock` is opened with OPEN_ALWAYS and FILE_SHARE_READ | FILE_SHARE_WRITE. Delete sharing is denied while handles are active to keep one stable coordination object. LockFileEx locks byte offset 0, length 1 using a zeroed OVERLAPPED for normal readers and Force. First initialization exclusively locks bytes 0 and 1 together: byte 1 is a transient kernel-only initialization marker, not file contents or ownership metadata. A non-waiting marker probe distinguishes initialization races from ordinary contention. Normal open holds a shared lock through current read/validation and Context construction. Force holds an exclusive lock through both file commits and returned Context preparation. Both modes use LOCKFILE_FAIL_IMMEDIATELY; contention returns BUSY. Lock acquisition itself never waits. Only first-init coordination retains a bounded race grace (at most twenty-four 10ms delays, 240ms total) so concurrent initialization can load one CREATE_NEW winner. An already-existing state container without current is not silently initialized.
+
+UnlockFileEx and CloseHandle run on every acquired-lock exit path. The file stays empty and persistent, without PID, timestamp or identity metadata; file existence does not imply ownership. Process termination releases kernel locks, though Windows may take time to release them under resource pressure. A release error is reported as IO_ERROR and no returned Context is published; a completed mutation is not rewritten merely because unlock failed. See [LockFileEx](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-lockfileex).
+
+Ordinary builds contain no failure callback or global fault state. Only the dedicated failure test compiles OBSCURA64_TESTING and supplies one-shot hooks at temp creation/write/flush/reopen, pre-verification, replacement, final reopen/post-verification and post-replacement observation. Tests cover history and current failure separately, rollback verification, history-success/current-failure overlap, repeated retry retention, and abrupt termination of a child paused before replacement, between history/current commits, and after current replacement. These are process-crash and deterministic failure tests, not hardware power-failure certification.
+
+Verified same-directory replacement, FlushFileBuffers, and MOVEFILE_WRITE_THROUGH remain required. No existing authoritative file is intentionally truncated or rewritten in place. Current remains authoritative for normal open; bad/missing history blocks mutation as specified above. Safe overlap is normalized only during an explicitly requested Force. Corrupt current is not regenerated; stale temp artifacts are neither authoritative nor recovery candidates and are preserved unless owned by the invocation.
+
+Directory durability limitation: the local Windows probe could open and flush a directory with GENERIC_READ | GENERIC_WRITE and FILE_FLAG_BACKUP_SEMANTICS; read-only directory flush failed with ERROR_ACCESS_DENIED. This observation does not establish a portable directory-metadata durability contract across Windows filesystems. No mandatory directory-handle flush or privileged volume flush is added: it would introduce additional access/compatibility requirements without proving transactional or controller-level durability. File-level flush and write-through replacement are retained. See [FlushFileBuffers](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-flushfilebuffers) and [directory handles](https://learn.microsoft.com/en-us/windows/win32/fileio/obtaining-a-handle-to-a-directory).
+
+Stage 5 is complete within these tested Windows persistence guarantees. There are no redundant copies, ProgramData/AppData/Registry storage or automatic recovery. Stage 6 is next; Stage 7 release work remains later.

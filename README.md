@@ -66,7 +66,9 @@ Back up and migrate `.obscura64` together with the project data. An existing sta
 
 Force Reinitialize keeps Project ID, increments generation, and chooses a different Profile. Existing contexts retain their old Profile; callers should retire old contexts when finished. Previously encoded data is not automatically migrated to the new Profile.
 
-Current persistence uses basic flush, verification, replacement, and a minimal Force operation lock. Full persistence hardening, crash handling, and stale lock/temp handling remain planned work.
+Stage 5 persistence hardening is complete: verified same-directory replacement, managed current/history consistency checks, Windows shared/exclusive kernel locking, and deterministic failure/process-crash tests. Normal open uses a shared lock and only requires valid current; Force uses an exclusive lock and requires consistent history when generations require it. Existing-project lock contention returns BUSY without waiting. First-initialization race coordination alone permits a bounded grace of at most 240ms; a kernel-only marker distinguishes it from ordinary mutation. The persistent, empty `operation.lock` file is not ownership; process exit releases its kernel locks. Stale temp files are ignored and preserved. No automatic recovery or redundant copies exist yet.
+
+These tests do not certify all power-loss, filesystem or controller failure scenarios. File flush and write-through replacement are used; no universal directory-durability guarantee is claimed. See the [state persistence notes](docs/PROJECT_STATE_V1.md).
 
 ## Security Model
 
@@ -107,7 +109,7 @@ Advanced integrations may select a compile-time default Provider with the `OBSCU
 
 ## Tests
 
-Test categories cover smoke/link checks, Profile validation and generation, the frozen library, runtime selection, strict codec behavior, public APIs, Providers, state formats, project initialization and reopening, and Force Reinitialize/history retention and failure handling. Tests use standard C and Windows APIs without a third-party test framework.
+Test categories cover smoke/link checks, Profile validation and generation, the frozen library, runtime selection, strict codec behavior, public APIs, Providers, state formats, project initialization and reopening, Force Reinitialize/history retention, multi-process locking, and deterministic persistence failure/process-crash handling. Tests use standard C and Windows APIs without a third-party test framework.
 
 ## Current Status
 
@@ -115,11 +117,10 @@ This is a Pre-1.0 development snapshot. **Public API may still change before 1.0
 
 ## Roadmap
 
-Completed: Stage 0 Specification; Stage 1 Codec Core; Stage 2 Profile System; Stage 3 Public API / Provider; Stage 4 Project State / History.
+Completed: Stage 0 Specification; Stage 1 Codec Core; Stage 2 Profile System; Stage 3 Public API / Provider; Stage 4 Project State / History; Stage 5 Persistence Hardening.
 
 Upcoming:
 
-- Stage 5: persistence hardening.
 - Stage 6: redundancy and automatic recovery, including planned project-state backup locations.
 - Stage 7: disaster recovery and release preparation, including the planned Managed Payload format.
 

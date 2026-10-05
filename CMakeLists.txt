@@ -21,6 +21,7 @@ add_library(obscura64 STATIC
     src/obscura64_history.c
     src/obscura64_persistence.c
     src/obscura64_managed_state.c
+    src/obscura64_lock.c
 )
 
 target_include_directories(obscura64
@@ -267,3 +268,25 @@ if(MSVC)
     target_compile_options(obscura64_test_managed_state PRIVATE /W4)
 endif()
 add_test(NAME obscura64_managed_state COMMAND obscura64_test_managed_state)
+
+add_executable(obscura64_test_locking tests/test_obscura64_locking.c)
+target_include_directories(obscura64_test_locking PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(obscura64_test_locking PRIVATE obscura64)
+if(MSVC)
+    target_compile_options(obscura64_test_locking PRIVATE /W4)
+endif()
+add_test(NAME obscura64_locking COMMAND obscura64_test_locking)
+
+# Dedicated instrumented executable: production obscura64 has no hooks or state.
+get_target_property(OBSCURA64_FAULT_TEST_SOURCES obscura64 SOURCES)
+add_executable(obscura64_test_failure tests/test_obscura64_failure.c ${OBSCURA64_FAULT_TEST_SOURCES})
+target_compile_definitions(obscura64_test_failure PRIVATE OBSCURA64_TESTING)
+target_include_directories(obscura64_test_failure PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src)
+if(WIN32)
+    target_link_libraries(obscura64_test_failure PRIVATE bcrypt)
+endif()
+if(MSVC)
+    target_compile_options(obscura64_test_failure PRIVATE /W4)
+endif()
+add_test(NAME obscura64_failure COMMAND obscura64_test_failure)

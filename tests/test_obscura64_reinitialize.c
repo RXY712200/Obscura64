@@ -318,6 +318,7 @@ static int test_force(void)
     obscura64_provider provider;
     unsigned int callbacks = 0, i;
     HANDLE held;
+    obscura64_lock *busy_lock = NULL;
     const unsigned char sample[] = {0, 1, 2, 255, 31};
     char encoded[16];
     unsigned char decoded[16];
@@ -386,7 +387,7 @@ static int test_force(void)
         obscura64_context_destroy(reopened); reopened = NULL;
         snapshots[state.generation] = state;
         old_state = state; memcpy(before, after, 160);
-        RCHECK(GetFileAttributesW(lock_path) == INVALID_FILE_ATTRIBUTES, "Force releases own lock");
+        RCHECK(GetFileAttributesW(lock_path) != INVALID_FILE_ATTRIBUTES, "Force preserves coordination file");
     }
     obscura64_context_destroy(old_context); old_context = NULL;
     provider = *obscura64_builtin_provider(); provider.user_data = &callbacks; provider.encode = provider_encode;
@@ -403,14 +404,12 @@ static int test_force(void)
         history.entries[2].generation == 6 && memcmp(history.entries[2].profile, snapshots[6].profile, 64) == 0,
         "custom Provider preserves old history");
 
-    held = CreateFileW(lock_path, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
-    RCHECK(held != INVALID_HANDLE_VALUE, "manual busy lock");
+    RCHECK(obscura64_lock_acquire_exclusive(lock_path, &busy_lock) == OBSCURA64_OK, "manual active kernel lock");
     RCHECK(obscura64_force_reinitialize(utf8[0], &new_context) == OBSCURA64_BUSY && new_context == NULL, "busy status");
     RCHECK(file_bytes(current_path, after, 160, 0) && memcmp(before, after, 160) == 0 &&
         file_bytes(history_path, history_blob, 336, 0) && memcmp(saved_history, history_blob, 336) == 0, "busy leaves both states unchanged");
-    CloseHandle(held);
-    RCHECK(GetFileAttributesW(lock_path) != INVALID_FILE_ATTRIBUTES && DeleteFileW(lock_path), "Force did not delete another owner's lock");
-    RCHECK(obscura64_force_reinitialize(utf8[0], &new_context) == OBSCURA64_OK, "Force works after busy lock removed");
+    RCHECK(obscura64_lock_release(busy_lock) == OBSCURA64_OK && GetFileAttributesW(lock_path) != INVALID_FILE_ATTRIBUTES, "release kernel lock preserves file");
+    RCHECK(obscura64_force_reinitialize(utf8[0], &new_context) == OBSCURA64_OK, "Force works after kernel lock released");
     obscura64_context_destroy(new_context); new_context = NULL;
     RCHECK(file_bytes(current_path, before, 160, 0) && file_bytes(history_path, saved_history, 336, 0), "save current/history failure baseline");
 
@@ -436,7 +435,7 @@ static int test_force(void)
     RCHECK(file_bytes(current_path, after, 160, 0) && memcmp(before, after, 160) == 0 &&
         file_bytes(history_path, history_blob, 336, 0) && memcmp(saved_history, history_blob, 336) == 0,
         "history write failure leaves current and prior history untouched");
-    RCHECK(GetFileAttributesW(lock_path) == INVALID_FILE_ATTRIBUTES, "history failure releases lock");
+    RCHECK(GetFileAttributesW(lock_path) != INVALID_FILE_ATTRIBUTES, "history failure preserves coordination file");
     RCHECK(no_replacement_temps(projects[0], L"\\.obscura64\\history.state.tmp.*"), "failed history temp cleaned");
 
     held = CreateFileW(current_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -449,7 +448,7 @@ static int test_force(void)
         file_bytes(history_path, history_blob, 336, 0) && obscura64_history_deserialize(history_blob, 336, &history) == OBSCURA64_CORE_STATUS_SUCCESS &&
         history.entries[0].generation == state.generation && memcmp(history.entries[0].profile, state.profile, 64) == 0,
         "history first: old Profile retained when current replacement fails");
-    RCHECK(GetFileAttributesW(lock_path) == INVALID_FILE_ATTRIBUTES, "current failure releases lock");
+    RCHECK(GetFileAttributesW(lock_path) != INVALID_FILE_ATTRIBUTES, "current failure preserves coordination file");
     RCHECK(no_replacement_temps(projects[0], L"\\.obscura64\\current.state.tmp.*"), "failed current temp cleaned");
 
     memcpy(saved_history, history_blob, 336);
@@ -480,7 +479,7 @@ static int test_force(void)
     RCHECK(obscura64_force_reinitialize(utf8[0], &new_context) == OBSCURA64_SIZE_OVERFLOW && new_context == NULL, "overflow rejected");
     RCHECK(file_bytes(current_path, after, 160, 0) && memcmp(before, after, 160) == 0 &&
         file_bytes(history_path, history_blob, 336, 0) && memcmp(saved_history, history_blob, 336) == 0, "overflow changes neither file");
-    RCHECK(GetFileAttributesW(lock_path) == INVALID_FILE_ATTRIBUTES, "overflow lock cleanup");
+    RCHECK(GetFileAttributesW(lock_path) != INVALID_FILE_ATTRIBUTES, "overflow preserves coordination file");
     RCHECK(strcmp(obscura64_status_string(OBSCURA64_BUSY), "project operation busy") == 0, "BUSY status string");
     RCHECK(obscura64_force_reinitialize(NULL, &new_context) == OBSCURA64_INVALID_ARGUMENT && new_context == NULL, "null Force path");
     RCHECK(obscura64_force_reinitialize("\xC3\x28", &new_context) == OBSCURA64_INVALID_ARGUMENT && new_context == NULL, "invalid UTF-8 Force path");

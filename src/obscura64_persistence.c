@@ -6,6 +6,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef OBSCURA64_TESTING
+#define FAULT(point, target, temp) obscura64_test_fault(point, target, temp)
+#else
+#define FAULT(point, target, temp) 0
+#endif
+
 #define TEMP_RETRIES 32U
 #define TEMP_SUFFIX_LENGTH 21U /* .tmp. plus sixteen hex digits */
 
@@ -27,7 +33,7 @@ static obscura64_status write_exact(HANDLE file, const unsigned char *data, size
             written == 0 || written > request) return OBSCURA64_IO_ERROR;
         position += written;
     }
-    return FlushFileBuffers(file) ? OBSCURA64_OK : OBSCURA64_IO_ERROR;
+    return OBSCURA64_OK;
 }
 
 obscura64_status obscura64_persistence_read_verified(
@@ -126,6 +132,7 @@ obscura64_status obscura64_persistence_create_new_verified(
             OBSCURA64_BUSY : OBSCURA64_IO_ERROR;
     }
     status = write_exact(file, data, size);
+    if (status == OBSCURA64_OK && !FlushFileBuffers(file)) status = OBSCURA64_IO_ERROR;
     if (!CloseHandle(file)) status = OBSCURA64_IO_ERROR;
     if (status == OBSCURA64_OK) status = verify_file(path, data, size, verify, user_data);
     if (status != OBSCURA64_OK) (void)DeleteFileW(path); /* Own CREATE_NEW winner only. */
@@ -149,6 +156,8 @@ static obscura64_status replace_once(const wchar_t *path, const unsigned char *d
     memcpy(temporary, path, length * sizeof(*temporary));
     memcpy(temporary + length, L".tmp.", 5U * sizeof(*temporary));
     temporary[length + TEMP_SUFFIX_LENGTH] = L'\0';
+    for (size_t i = 0; i < 16U; ++i) temporary[length + 5U + i] = L'0';
+    if (FAULT(OBSCURA64_FAULT_TEMP_CREATE, path, temporary)) goto done;
     for (attempt = 0; attempt < TEMP_RETRIES; ++attempt) {
         unsigned char random[8];
         size_t i;
@@ -169,15 +178,26 @@ static obscura64_status replace_once(const wchar_t *path, const unsigned char *d
         }
     }
     if (file == INVALID_HANDLE_VALUE) goto done; /* Never remove collision files. */
-    status = write_exact(file, data, size);
+    status = FAULT(OBSCURA64_FAULT_TEMP_WRITE, path, temporary) ?
+        OBSCURA64_IO_ERROR : write_exact(file, data, size);
+    if (status == OBSCURA64_OK && (FAULT(OBSCURA64_FAULT_TEMP_FLUSH, path, temporary) ||
+        !FlushFileBuffers(file))) status = OBSCURA64_IO_ERROR;
     if (!CloseHandle(file)) status = OBSCURA64_IO_ERROR;
+    if (status == OBSCURA64_OK && FAULT(OBSCURA64_FAULT_TEMP_REOPEN, path, temporary)) status = OBSCURA64_IO_ERROR;
     if (status == OBSCURA64_OK) status = verify_file(temporary, data, size, verify, user_data);
+    if (status == OBSCURA64_OK && FAULT(OBSCURA64_FAULT_PRE_VERIFY, path, temporary)) status = OBSCURA64_STATE_CORRUPT;
     if (status == OBSCURA64_OK) {
-        if (!MoveFileExW(temporary, path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+        if (FAULT(OBSCURA64_FAULT_REPLACE, path, temporary) ||
+            !MoveFileExW(temporary, path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
             status = OBSCURA64_IO_ERROR;
         else {
             *renamed = 1;
-            status = verify_file(path, data, size, verify, user_data);
+            /* AFTER_REPLACE is an observation/crash point in test builds only. */
+            if (FAULT(OBSCURA64_FAULT_AFTER_REPLACE, path, temporary) ||
+                FAULT(OBSCURA64_FAULT_FINAL_REOPEN, path, temporary)) status = OBSCURA64_IO_ERROR;
+            else status = verify_file(path, data, size, verify, user_data);
+            if (status == OBSCURA64_OK && FAULT(OBSCURA64_FAULT_POST_VERIFY, path, temporary))
+                status = OBSCURA64_STATE_CORRUPT;
         }
     }
     if (!*renamed) (void)DeleteFileW(temporary); /* Only our successfully created temp. */

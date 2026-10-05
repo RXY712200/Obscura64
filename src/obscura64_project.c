@@ -12,7 +12,7 @@
 
 #define PROJECT_STATE_DIRECTORY L".obscura64"
 #define PROJECT_STATE_FILENAME L"current.state"
-#define PROJECT_RACE_RETRIES 5U
+#define PROJECT_RACE_RETRIES 25U
 #define PROJECT_RACE_DELAY_MS 10U
 #define PROJECT_ID_ZERO_RETRIES 8U
 
@@ -108,25 +108,6 @@ static obscura64_status read_state_file(
     return obscura64_persistence_read_verified(state_path, bytes, sizeof(bytes), verify_state, state);
 }
 
-static obscura64_status read_state_with_retries(
-    const WCHAR *state_path,
-    obscura64_project_state *state,
-    unsigned int retries)
-{
-    unsigned int attempt;
-    obscura64_status status = OBSCURA64_STATE_MISSING;
-    for (attempt = 0; attempt < retries; ++attempt) {
-        status = read_state_file(state_path, state);
-        if (status == OBSCURA64_OK) {
-            return status;
-        }
-        if (attempt + 1U < retries) {
-            Sleep(PROJECT_RACE_DELAY_MS);
-        }
-    }
-    return status;
-}
-
 static int project_id_is_nonzero(const uint8_t project_id[OBSCURA64_PROJECT_ID_SIZE])
 {
     size_t i;
@@ -196,138 +177,90 @@ static obscura64_status prepare_initial_state(
     return OBSCURA64_OK;
 }
 
-static obscura64_status write_initial_state_file(
-    const WCHAR *state_path,
-    const unsigned char serialized[OBSCURA64_STATE_V1_SIZE],
-    obscura64_project_state *state)
-{
-    obscura64_status status = obscura64_persistence_create_new_verified(
-        state_path, serialized, OBSCURA64_STATE_V1_SIZE, verify_state, state);
-    if (status == OBSCURA64_BUSY)
-        return read_state_with_retries(state_path, state, PROJECT_RACE_RETRIES);
-    return status;
-}
-
-static obscura64_status open_project_state(
-    const WCHAR *project_path,
-    obscura64_project_state *state)
-{
-    DWORD project_attributes = GetFileAttributesW(project_path);
-    WCHAR *state_directory;
-    WCHAR *state_path;
-    DWORD directory_attributes;
-    obscura64_status status;
-    obscura64_project_state candidate_state;
-    unsigned char candidate_blob[OBSCURA64_STATE_V1_SIZE];
-
-    if (project_attributes == INVALID_FILE_ATTRIBUTES ||
-        (project_attributes & FILE_ATTRIBUTE_DIRECTORY) == 0) {
-        return OBSCURA64_IO_ERROR;
-    }
-    state_directory = append_component(project_path, PROJECT_STATE_DIRECTORY);
-    if (state_directory == NULL) {
-        return OBSCURA64_OUT_OF_MEMORY;
-    }
-    state_path = append_component(state_directory, PROJECT_STATE_FILENAME);
-    if (state_path == NULL) {
-        free(state_directory);
-        return OBSCURA64_OUT_OF_MEMORY;
-    }
-
-    directory_attributes = GetFileAttributesW(state_directory);
-    if (directory_attributes != INVALID_FILE_ATTRIBUTES) {
-        if ((directory_attributes & FILE_ATTRIBUTE_DIRECTORY) == 0) {
-            status = OBSCURA64_IO_ERROR;
-        } else {
-            status = read_state_with_retries(state_path, state, PROJECT_RACE_RETRIES);
-        }
-        free(state_path);
-        free(state_directory);
-        return status;
-    }
-
-    if (!is_path_not_found_error(GetLastError())) {
-        free(state_path);
-        free(state_directory);
-        return OBSCURA64_IO_ERROR;
-    }
-    status = prepare_initial_state(&candidate_state, candidate_blob);
-    if (status != OBSCURA64_OK) {
-        free(state_path);
-        free(state_directory);
-        return status;
-    }
-    if (CreateDirectoryW(state_directory, NULL)) {
-        status = write_initial_state_file(state_path, candidate_blob, state);
-        free(state_path);
-        free(state_directory);
-        return status;
-    }
-
-    {
-        DWORD error = GetLastError();
-        unsigned int attempt;
-        if (error != ERROR_ALREADY_EXISTS && error != ERROR_FILE_EXISTS) {
-            free(state_path);
-            free(state_directory);
-            return OBSCURA64_IO_ERROR;
-        }
-        status = OBSCURA64_STATE_MISSING;
-        for (attempt = 0; attempt < PROJECT_RACE_RETRIES; ++attempt) {
-            directory_attributes = GetFileAttributesW(state_directory);
-            if (directory_attributes != INVALID_FILE_ATTRIBUTES) {
-                if ((directory_attributes & FILE_ATTRIBUTE_DIRECTORY) == 0) {
-                    status = OBSCURA64_IO_ERROR;
-                    break;
-                }
-                status = read_state_file(state_path, state);
-                if (status == OBSCURA64_OK || status == OBSCURA64_IO_ERROR) {
-                    break;
-                }
-            }
-            if (attempt + 1U < PROJECT_RACE_RETRIES) {
-                Sleep(PROJECT_RACE_DELAY_MS);
-            }
-        }
-    }
-    free(state_path);
-    free(state_directory);
-    return status;
-}
-
 obscura64_status obscura64_project_open_internal(
-    const char *project_path_utf8,
-    const obscura64_provider *provider,
+    const char *project_path_utf8, const obscura64_provider *provider,
     obscura64_context **out_context)
 {
-    WCHAR *project_path = NULL;
+    WCHAR *project = NULL, *directory = NULL, *current = NULL, *lock_path = NULL;
+    obscura64_lock *lock = NULL;
+    obscura64_context *context = NULL;
     obscura64_project_state state;
-    obscura64_context *provider_probe = NULL;
+    unsigned char blob[OBSCURA64_STATE_V1_SIZE];
+    DWORD attributes;
+    int fresh = 0, initializing;
+    unsigned int attempt;
     obscura64_status status;
-
-    if (out_context == NULL) {
-        return OBSCURA64_INVALID_ARGUMENT;
-    }
+    if (out_context == NULL) return OBSCURA64_INVALID_ARGUMENT;
     *out_context = NULL;
-    status = convert_path_utf8(project_path_utf8, &project_path);
-    if (status != OBSCURA64_OK) {
-        return status;
-    }
+    status = convert_path_utf8(project_path_utf8, &project);
+    if (status != OBSCURA64_OK) return status;
     status = obscura64_context_create_from_profile_with_provider(
-        obscura64_v1_character_pool, OBSCURA64_PROFILE_SIZE, provider, &provider_probe);
-    if (status != OBSCURA64_OK) {
-        free(project_path);
-        return status;
+        obscura64_v1_character_pool, OBSCURA64_PROFILE_SIZE, provider, &context);
+    if (status != OBSCURA64_OK) goto done;
+    attributes = GetFileAttributesW(project);
+    if (attributes == INVALID_FILE_ATTRIBUTES || !(attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+        status = OBSCURA64_IO_ERROR; goto done;
     }
-    obscura64_context_destroy(provider_probe);
-
-    status = open_project_state(project_path, &state);
-    free(project_path);
-    if (status != OBSCURA64_OK) {
-        return status;
+    directory = append_component(project, PROJECT_STATE_DIRECTORY);
+    if (directory == NULL) { status = OBSCURA64_OUT_OF_MEMORY; goto done; }
+    attributes = GetFileAttributesW(directory);
+    if (attributes == INVALID_FILE_ATTRIBUTES) {
+        if (!is_path_not_found_error(GetLastError())) { status = OBSCURA64_IO_ERROR; goto done; }
+        fresh = 1;
+        if (!CreateDirectoryW(directory, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
+            status = OBSCURA64_IO_ERROR; goto done;
+        }
+    } else if (!(attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+        status = OBSCURA64_IO_ERROR; goto done;
     }
-    return obscura64_context_create_from_profile_with_provider(
-        state.profile, OBSCURA64_PROFILE_SIZE, provider, out_context);
+    current = append_component(directory, PROJECT_STATE_FILENAME);
+    lock_path = append_component(directory, L"operation.lock");
+    if (current == NULL || lock_path == NULL) { status = OBSCURA64_OUT_OF_MEMORY; goto done; }
+    /* Only first-init coordination gets the bounded 240ms race grace. Existing
+     * healthy projects never retry lock contention. A pre-existing empty container
+     * is never initialized unless this call originally observed it absent. */
+    initializing = fresh || (GetFileAttributesW(current) == INVALID_FILE_ATTRIBUTES &&
+                              is_path_not_found_error(GetLastError()));
+    for (attempt = 0; attempt < PROJECT_RACE_RETRIES; ++attempt) {
+        status = fresh ? obscura64_lock_acquire_initial(lock_path, &lock) :
+                         obscura64_lock_acquire_shared(lock_path, &lock);
+        if (status == OBSCURA64_BUSY && !fresh) {
+            int active = 0;
+            obscura64_status probe = obscura64_lock_initialization_active(lock_path, &active);
+            if (probe != OBSCURA64_OK) { status = probe; break; }
+            if (!active) {
+                /* Holder may have exited between failed acquire and marker probe.
+                 * One immediate recheck avoids misclassifying that init race. */
+                status = obscura64_lock_acquire_shared(lock_path, &lock);
+                if (status != OBSCURA64_OK &&
+                    !(status == OBSCURA64_BUSY && initializing)) break;
+            } else initializing = 1;
+        }
+        if (status == OBSCURA64_OK) {
+            status = read_state_file(current, &state);
+            if (status == OBSCURA64_STATE_MISSING && fresh) {
+                status = prepare_initial_state(&state, blob);
+                if (status == OBSCURA64_OK)
+                    status = obscura64_persistence_create_new_verified(current, blob,
+                        sizeof(blob), verify_state, &state);
+                if (status == OBSCURA64_BUSY) status = read_state_file(current, &state);
+            }
+            if (status == OBSCURA64_OK) {
+                memcpy(context->profile, state.profile, OBSCURA64_PROFILE_SIZE);
+                break;
+            }
+            if (obscura64_lock_release(lock) != OBSCURA64_OK) status = OBSCURA64_IO_ERROR;
+            lock = NULL;
+        }
+        if (!initializing || (status != OBSCURA64_BUSY && status != OBSCURA64_STATE_MISSING)) break;
+        if (attempt + 1U < PROJECT_RACE_RETRIES) Sleep(PROJECT_RACE_DELAY_MS);
+    }
+done:
+    if (lock != NULL && obscura64_lock_release(lock) != OBSCURA64_OK) status = OBSCURA64_IO_ERROR;
+    if (status == OBSCURA64_OK) { *out_context = context; context = NULL; }
+    obscura64_context_destroy(context);
+    free(lock_path); free(current); free(directory); free(project);
+    return status;
 }
 
 /* Managed-set validation precedes this builder. Keep newest-first order and
@@ -362,7 +295,7 @@ static obscura64_status force_reinitialize_internal(
 {
     WCHAR *project = NULL, *directory = NULL, *current_path = NULL;
     WCHAR *history_path = NULL, *lock_path = NULL;
-    HANDLE lock = INVALID_HANDLE_VALUE;
+    obscura64_lock *lock = NULL;
     obscura64_context *reserved_context = NULL;
     obscura64_project_state old_state, new_state;
     obscura64_project_history old_history, new_history;
@@ -403,14 +336,8 @@ static obscura64_status force_reinitialize_internal(
     if (current_path == NULL || history_path == NULL || lock_path == NULL) {
         status = OBSCURA64_OUT_OF_MEMORY; goto cleanup;
     }
-    lock = CreateFileW(lock_path, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (lock == INVALID_HANDLE_VALUE) {
-        DWORD error = GetLastError();
-        status = (error == ERROR_FILE_EXISTS || error == ERROR_ALREADY_EXISTS ||
-                  GetFileAttributesW(lock_path) != INVALID_FILE_ATTRIBUTES) ?
-            OBSCURA64_BUSY : OBSCURA64_IO_ERROR;
-        goto cleanup;
-    }
+    status = obscura64_lock_acquire_exclusive(lock_path, &lock);
+    if (status != OBSCURA64_OK) goto cleanup;
     status = read_state_file(current_path, &old_state);
     if (status != OBSCURA64_OK) goto cleanup;
     if (old_state.generation == UINT64_MAX) { status = OBSCURA64_SIZE_OVERFLOW; goto cleanup; }
@@ -459,9 +386,10 @@ static obscura64_status force_reinitialize_internal(
     *out_context = reserved_context;
     reserved_context = NULL;
 cleanup:
-    if (lock != INVALID_HANDLE_VALUE) {
-        (void)CloseHandle(lock);
-        (void)DeleteFileW(lock_path);
+    if (lock != NULL && obscura64_lock_release(lock) != OBSCURA64_OK) {
+        status = OBSCURA64_IO_ERROR;
+        obscura64_context_destroy(*out_context);
+        *out_context = NULL;
     }
     obscura64_context_destroy(reserved_context);
     free(lock_path); free(history_path); free(current_path); free(directory); free(project);

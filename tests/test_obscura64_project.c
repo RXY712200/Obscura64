@@ -98,6 +98,8 @@ static void cleanup_project(const WCHAR *project)
         make_child(state_path, sizeof(state_path) / sizeof(state_path[0]),
                    state_directory, L"\\current.state")) {
         (void)DeleteFileW(state_path);
+        if (make_child(state_path, sizeof(state_path) / sizeof(state_path[0]), state_directory, L"\\operation.lock"))
+            (void)DeleteFileW(state_path);
         (void)RemoveDirectoryW(state_directory);
     }
     (void)RemoveDirectoryW(project);
@@ -370,6 +372,8 @@ int main(void)
     CHECK(WaitForMultipleObjects(2, threads, TRUE, 10000) == WAIT_OBJECT_0,
           "concurrent opens finish");
     for (i = 0; i < 2; ++i) {
+        if (calls[i].status != OBSCURA64_OK)
+            fprintf(stderr, "concurrent first-open status: %s\n", obscura64_status_string(calls[i].status));
         CHECK(calls[i].status == OBSCURA64_OK, "both concurrent first opens succeed");
         CloseHandle(threads[i]);
     }

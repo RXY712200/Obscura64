@@ -7,6 +7,32 @@
 #include <stdint.h>
 #include <wchar.h>
 
+typedef struct obscura64_lock obscura64_lock;
+obscura64_status obscura64_lock_acquire_shared(const wchar_t *path, obscura64_lock **lock);
+obscura64_status obscura64_lock_acquire_exclusive(const wchar_t *path, obscura64_lock **lock);
+/* Initial writer locks coordination byte 0 plus transient marker byte 1.
+ * The marker is kernel-only; it distinguishes initialization from normal BUSY. */
+obscura64_status obscura64_lock_acquire_initial(const wchar_t *path, obscura64_lock **lock);
+obscura64_status obscura64_lock_initialization_active(const wchar_t *path, int *active);
+obscura64_status obscura64_lock_release(obscura64_lock *lock);
+
+#ifdef OBSCURA64_TESTING
+typedef enum obscura64_test_fault_point {
+    OBSCURA64_FAULT_TEMP_CREATE,
+    OBSCURA64_FAULT_TEMP_WRITE,
+    OBSCURA64_FAULT_TEMP_FLUSH,
+    OBSCURA64_FAULT_TEMP_REOPEN,
+    OBSCURA64_FAULT_PRE_VERIFY,
+    OBSCURA64_FAULT_REPLACE,
+    OBSCURA64_FAULT_FINAL_REOPEN,
+    OBSCURA64_FAULT_POST_VERIFY,
+    OBSCURA64_FAULT_AFTER_REPLACE
+} obscura64_test_fault_point;
+/* Supplied only by the dedicated test executable; no production hook state. */
+int obscura64_test_fault(obscura64_test_fault_point point,
+    const wchar_t *target, const wchar_t *temporary);
+#endif
+
 /* Windows-private byte persistence; verifiers own format semantics. */
 typedef obscura64_status (*obscura64_persistence_verify_fn)(
     const unsigned char *data, size_t length, void *user_data);

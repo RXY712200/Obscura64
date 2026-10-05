@@ -102,7 +102,7 @@ static int file_io(const WCHAR *path, unsigned char *data, DWORD size, int write
     return ok && count == size;
 }
 
-static int directory_clean(const WCHAR *directory, int has_history)
+static int directory_clean_once(const WCHAR *directory, int has_history)
 {
     WCHAR pattern[MAX_PATH * 2];
     WIN32_FIND_DATAW entry;
@@ -114,19 +114,52 @@ static int directory_clean(const WCHAR *directory, int has_history)
     search = FindFirstFileW(pattern, &entry);
     if (search == INVALID_HANDLE_VALUE) return 0;
     do {
+        WCHAR entry_path[MAX_PATH * 2];
         if (wcscmp(entry.cFileName, L".") == 0 || wcscmp(entry.cFileName, L"..") == 0) continue;
+        /* Enumeration may include an already deleted rename source. Check existence. */
+        if (wcslen(directory) + wcslen(entry.cFileName) + 2U >= MAX_PATH * 2) { ok = 0; break; }
+        wcscpy(entry_path, directory); wcscat(entry_path, L"\\"); wcscat(entry_path, entry.cFileName);
+        if (GetFileAttributesW(entry_path) == INVALID_FILE_ATTRIBUTES &&
+            GetLastError() == ERROR_FILE_NOT_FOUND) continue;
         ++count;
         if (wcscmp(entry.cFileName, L"current.state") != 0 &&
-            wcscmp(entry.cFileName, L"history.state") != 0) ok = 0;
+            wcscmp(entry.cFileName, L"history.state") != 0 &&
+            wcscmp(entry.cFileName, L"operation.lock") != 0) {
+            ok = 0;
+        }
     } while (FindNextFileW(search, &entry));
     FindClose(search);
-    return ok && count == (has_history ? 2U : 1U);
+    return ok && count == (has_history ? 3U : 2U);
+}
+
+static int directory_clean(const WCHAR *directory, int has_history)
+{
+    unsigned int attempt;
+    /* Deleted rename sources can remain briefly enumerable on this Windows volume.
+       A persistent extra file still fails; this does not remove or accept it. */
+    for (attempt = 0; attempt < 25U; ++attempt) {
+        if (directory_clean_once(directory, has_history)) return 1;
+        Sleep(10);
+    }
+    fwprintf(stderr, L"Directory contents did not settle: %ls\n", directory);
+    return 0;
+}
+
+static int remove_owned_directory(const WCHAR *path)
+{
+    unsigned int attempt;
+    for (attempt = 0; attempt < 25U; ++attempt) {
+        if (RemoveDirectoryW(path)) return 1;
+        if (GetLastError() != ERROR_DIR_NOT_EMPTY) return 0;
+        Sleep(10);
+    }
+    return 0;
 }
 
 static int project_checks(void)
 {
     WCHAR temp[MAX_PATH], seed[MAX_PATH], project[MAX_PATH * 2], directory[MAX_PATH * 2];
-    WCHAR current_path[MAX_PATH * 2], history_path[MAX_PATH * 2];
+    WCHAR current_path[MAX_PATH * 2], history_path[MAX_PATH * 2], lock_path[MAX_PATH * 2];
     char utf8[MAX_PATH * 6];
     obscura64_project_state current, after_current;
     obscura64_project_history history, after_history;
@@ -139,6 +172,7 @@ static int project_checks(void)
     wcscpy(directory, project); wcscat(directory, L"\\.obscura64");
     wcscpy(current_path, directory); wcscat(current_path, L"\\current.state");
     wcscpy(history_path, directory); wcscat(history_path, L"\\history.state");
+    wcscpy(lock_path, directory); wcscat(lock_path, L"\\operation.lock");
     CHECK(CreateDirectoryW(project, NULL) && CreateDirectoryW(directory, NULL), "Unicode managed project fixture");
     CHECK(WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, project, -1, utf8, sizeof(utf8), NULL, NULL), "UTF-8 project path");
 
@@ -222,7 +256,7 @@ static int project_checks(void)
             CHECK(directory_clean(directory, 1), "successful Force only expected managed files");
         }
     }
-    CHECK(DeleteFileW(current_path) && DeleteFileW(history_path) && RemoveDirectoryW(directory),
+    CHECK(DeleteFileW(current_path) && DeleteFileW(history_path) && DeleteFileW(lock_path) && remove_owned_directory(directory),
           "reset owned fixture for real initialization");
     CHECK(obscura64_open(utf8, &context) == OBSCURA64_OK, "initialize real managed project");
     obscura64_context_destroy(context); context = NULL;
@@ -271,7 +305,7 @@ static int project_checks(void)
             memcmp(current_after, current_bytes, sizeof(current_bytes)) == 0 && directory_clean(directory, 0),
             "missing real history not synthesized and current unchanged");
     }
-    CHECK(DeleteFileW(current_path) && RemoveDirectoryW(directory) && RemoveDirectoryW(project),
+    CHECK(DeleteFileW(current_path) && DeleteFileW(lock_path) && remove_owned_directory(directory) && remove_owned_directory(project),
           "cleanup only owned real project");
     return 0;
 }

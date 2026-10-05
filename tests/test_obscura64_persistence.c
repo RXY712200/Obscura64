@@ -96,10 +96,11 @@ static int only_project_files(const WCHAR *project, unsigned int expected)
         if (wcscmp(entry.cFileName, L".") == 0 || wcscmp(entry.cFileName, L"..") == 0) continue;
         ++count;
         if (wcscmp(entry.cFileName, L"current.state") != 0 &&
-            wcscmp(entry.cFileName, L"history.state") != 0) ok = 0;
+            wcscmp(entry.cFileName, L"history.state") != 0 &&
+            wcscmp(entry.cFileName, L"operation.lock") != 0) ok = 0;
     } while (FindNextFileW(search, &entry));
     FindClose(search);
-    return ok && count == expected;
+    return ok && count == expected + 1U;
 }
 
 int main(void)
@@ -202,6 +203,7 @@ int main(void)
     CHECK(only_project_files(project, 2), "Force only current and history");
     CHECK(join(path, project, L"\\.obscura64\\current.state") && DeleteFileW(path), "cleanup owned current");
     CHECK(join(path, project, L"\\.obscura64\\history.state") && DeleteFileW(path), "cleanup owned history");
+    CHECK(join(path, project, L"\\.obscura64\\operation.lock") && DeleteFileW(path), "cleanup owned lock file");
     CHECK(join(path, project, L"\\.obscura64") && RemoveDirectoryW(path) && RemoveDirectoryW(project), "cleanup project directories");
     CHECK(DeleteFileW(target) && DeleteFileW(sentinel) && DeleteFileW(fixed) && DeleteFileW(short_path) &&
         DeleteFileW(long_path) && RemoveDirectoryW(directory), "cleanup only owned fixture files");
