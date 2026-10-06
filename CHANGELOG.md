@@ -4,6 +4,10 @@
 
 - Added a canonical self-describing V2 byte envelope and ordinary
   `protect`/`unprotect` APIs with strict parsing and structural diagnostics.
+- Corrected the Preview 1 operation model before tagging: allocation-first
+  protection with explicit semantic selection; caller-buffer forms discover
+  actual result size after the backend operation. No generic arithmetic-only
+  size prediction API or implicit protection default.
 - The Preview 1 representation is explicitly unprotected; Casual and DPAPI
   protection, V1 migration, and V2 file tooling are future preview work.
 - Preserved V1 public entry points, wire formats, and frozen Profile artifacts.

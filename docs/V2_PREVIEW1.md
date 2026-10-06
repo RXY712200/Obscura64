@@ -16,18 +16,21 @@ exactly `24 + body_length`, with checked arithmetic and no trailing bytes.
 | 0 | 8 | Magic | ASCII `OB64ENV2` |
 | 8 | 2 | Format version | 2 |
 | 10 | 2 | Header size | 24 |
-| 12 | 2 | Protection kind | 0: preview plain body |
+| 12 | 2 | Protection kind | 0: explicit NONE/plain body; 1 and 2 reserved for Preview 2 |
 | 14 | 2 | Flags | 0; every unknown bit is rejected |
 | 16 | 8 | Protected body length | Exact byte length |
 | 24 | body length | Protected body | Arbitrary bytes |
 
 There are no reserved fields or application-schema metadata. Version 2 is a
 wire-format version, independent of the `2.0.0-preview.1` development version.
-Kind 0 is an explicit **unprotected preview representation** used to exercise
-canonical round trips. It has no confidentiality, integrity, or authentication.
-The future built-in Casual and Windows CurrentUser kinds will receive distinct
-identifiers; their layouts and identifiers are not frozen in Preview 1. Unknown
-kinds return `OBSCURA64_UNSUPPORTED_PROTECTION`. A wrong magic, header size,
+Kind 0 is an explicit **unprotected NONE representation**. It is deliberately
+retained as a supported opt-in semantic, not a default: it enables exact
+envelope interoperability and tests without implying protection. It has no
+confidentiality, integrity, or authentication. Kind 1 is reserved for Casual;
+kind 2 is reserved for Windows CurrentUser. Both return
+`OBSCURA64_UNSUPPORTED_PROTECTION` until Preview 2 implements them. Their
+backend body layouts are not specified in Preview 1. Unknown kinds return
+`OBSCURA64_UNSUPPORTED_PROTECTION`. A wrong magic, header size,
 flags, truncated input, length mismatch, or trailing data returns
 `OBSCURA64_ENVELOPE_CORRUPT`. Other format versions return
 `OBSCURA64_UNSUPPORTED_VERSION`. Unrepresentable length returns
@@ -36,21 +39,45 @@ attribution.
 
 ## Ordinary API
 
-`obscura64_protected_size`, `obscura64_protect`, and
-`obscura64_protect_alloc` produce the Preview 1 envelope. Matching
-`unprotected_size`, `unprotect`, and `unprotect_alloc` parse and dispatch it.
-Every byte array has an explicit length. `NULL` input is accepted only at zero
-length. The 24-byte empty envelope is valid; allocating empty unprotect returns
-`NULL` and length zero. Caller-buffer failure leaves output bytes unchanged;
-`BUFFER_TOO_SMALL` reports required capacity. Other failure clears the reported
-length. Allocating failures clear pointer and length; release successful
-allocations with `obscura64_free`. Caller input/output buffers must not overlap.
-The API has no project path, Profile, generation, or Provider argument.
+`obscura64_protect_alloc(protection, input, length, ...)` and
+`obscura64_unprotect_alloc(envelope, length, ...)` are the primary operations.
+Protection is a small semantic enum: `NONE` works now, while `CASUAL` and
+`CURRENT_USER` return `OBSCURA64_UNSUPPORTED_PROTECTION` until Preview 2.
+There is **no implicit default**. New data requires an explicit choice;
+unprotect learns the kind from the envelope. Already-written envelopes retain
+their recorded kind when future recommended choices change. No algorithm,
+DPAPI flag, key, project path, Profile, generation, or Provider is exposed.
 
-The Preview 1 default emits kind 0, so it should **not** be used to protect
-sensitive data. Preview 2 will add actual Casual and DPAPI CurrentUser kinds,
-automatic kind dispatch, and more precise protection diagnostics. This preview
-does not promise compatibility of kind 0 as a future default protection choice.
+The caller-buffer `obscura64_protect` and `obscura64_unprotect` forms perform
+the operation into library-owned temporary storage, then copy on success.
+`BUFFER_TOO_SMALL` reports the **actual** required size after the operation.
+A `NULL` output with zero capacity invokes that same operation to query size;
+it is not a cheap arithmetic calculation and may fail for backend reasons.
+There is no generic plaintext-length-only protected-size API and no generic
+pre-decryption plaintext-size API. Future DPAPI results can be wrapped after
+`CryptProtectData` or `CryptUnprotectData` returns its allocated blob, without
+an undocumented size formula or an unauthenticated plaintext-length hint.
+
+Every byte array has an explicit length. `NULL` input is accepted only at zero
+length. The 24-byte empty NONE envelope is valid; allocating empty unprotect
+returns `NULL` and length zero. Caller-buffer failure leaves output bytes
+unchanged; non-size failures report zero length. Allocating failures clear
+pointer and length; release successful allocations with `obscura64_free`.
+Caller input/output buffers must not overlap. Do not choose `NONE` for
+sensitive data or as a stand-in for Preview 2 protection.
+
+## External operation-model check
+
+Microsoft [CryptProtectData](https://learn.microsoft.com/en-us/windows/win32/api/dpapi/nf-dpapi-cryptprotectdata)
+and [CryptUnprotectData](https://learn.microsoft.com/en-us/windows/win32/api/dpapi/nf-dpapi-cryptunprotectdata)
+return operation-produced `DATA_BLOB` buffers owned under `LocalFree`, without
+an exact pre-operation output-size API. Electron
+[safeStorage](https://www.electronjs.org/docs/latest/api/safe-storage) returns
+an encrypted `Buffer`. The higher-level
+[Fernet API](https://cryptography.io/en/latest/fernet/) returns encrypted and
+decrypted bytes without exposing raw cipher selection in each call. These
+different APIs support one narrow conclusion for Obscura64: perform the
+selected semantic operation first, then report or copy its actual result.
 
 ## V1 compatibility and architecture decision
 
@@ -84,6 +111,9 @@ state or the V1 Provider ABI. Existing V1 APIs are the compatibility boundary.
 No V1-only component is a required V2 ordinary mechanism. No working V1
 module was deleted merely for architectural appearance. The source boundary
 is the standalone `obscura64_v2_envelope.c` module and its minimal public API.
+The operation-model correction found no need to alter the 24-byte wire layout:
+magic, version, header size, kind, zero-only flags, body length, and exact-size
+parsing already support operation-produced bodies.
 
 ## Deferred
 

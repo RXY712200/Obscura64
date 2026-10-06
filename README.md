@@ -15,12 +15,15 @@ Obscura64 is **NOT encryption**. It is not designed to resist professional rever
 
 ## V2 Preview 1
 
-The new `obscura64_protect` / `obscura64_unprotect` API accepts arbitrary bytes
-without a project directory or Profile. Its first envelope uses an explicit
-**unprotected preview body** to validate the V2 format. It must not be used for
-sensitive data. [Format and API details](docs/V2_PREVIEW1.md) describe the
-strict parser and compatibility boundary. Casual and Windows CurrentUser
-protection are planned for Preview 2.
+The new allocation-first `obscura64_protect_alloc` / `obscura64_unprotect_alloc`
+API accepts arbitrary bytes without a project directory or Profile. Protection
+requires an explicit semantic choice; there is no implicit default. Preview 1
+supports only opt-in `OBSCURA64_PROTECTION_NONE`, which produces an
+**unprotected plain body** and must not be used for sensitive data. Caller-buffer
+forms remain available and discover exact size by performing the operation.
+[Format and API details](docs/V2_PREVIEW1.md) describe the strict parser and
+compatibility boundary. Casual and Windows CurrentUser protection are planned
+for Preview 2.
 
 ## V1 Features and Compatibility
 
