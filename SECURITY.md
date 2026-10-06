@@ -2,8 +2,10 @@
 
 ## Supported versions
 
-Currently supported: **1.x**. Reports should identify the exact version, tag,
-or commit; this policy does not promise a response deadline.
+The stable **1.x** release is supported. Security reports about the current
+**2.0.0-preview.2 development source** are also accepted, but that preview is
+not a stable release. Reports should identify the exact version, tag, or
+commit; this policy does not promise a response deadline.
 
 ## Reporting a vulnerability
 
@@ -30,8 +32,10 @@ documented failure handling, and other implementation defects may qualify.
 V1 and V2 Casual supply reversible obfuscation and corruption validation, not
 cryptographic confidentiality or attacker authentication. V2 `NONE` supplies
 no protection. V2 CurrentUser delegates genuine current-user protection to
-Windows DPAPI; it is not portable and does not make client-side state a server
-trust boundary. Obscura64 does not implement its own encryption algorithm.
+Windows DPAPI; the inner Obscura64 digest checks corruption after DPAPI
+unprotect. Neither mechanism makes client-side state a server trust boundary
+or prevents an authorized local process from creating valid data. CurrentUser
+is not portable. Obscura64 does not implement its own encryption algorithm.
 
 Reversibility, public algorithm details, the frozen public Profile Library,
 Casual's lack of cryptographic confidentiality or authentication, a knowledgeable

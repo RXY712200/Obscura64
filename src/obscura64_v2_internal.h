@@ -25,6 +25,11 @@ obscura64_status obscura64_v2_current_user_protect(const void *input, size_t len
     void **body, size_t *body_len);
 obscura64_status obscura64_v2_current_user_unprotect(const void *body, size_t body_len,
     void **output, size_t *output_len);
+/* Canonical plaintext record inside the DPAPI blob; private and testable. */
+obscura64_status obscura64_v2_current_user_record_build(const void *input,
+    size_t input_len, unsigned char **record, size_t *record_len);
+obscura64_status obscura64_v2_current_user_record_parse(const unsigned char *record,
+    size_t record_len, const unsigned char **payload, size_t *payload_len);
 
 obscura64_status obscura64_v2_legacy_read(const void *data, size_t length,
     void **output, size_t *output_len);

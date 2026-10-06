@@ -13,7 +13,9 @@ add_library(obscura64 STATIC
     src/obscura64_v2_dispatch.c
     src/obscura64_v2_casual.c
     src/obscura64_v2_current_user.c
+    src/obscura64_v2_current_user_record.c
     src/obscura64_v2_legacy.c
+    src/obscura64_sha256.c
     src/obscura64_core.c
     src/obscura64_codec.c
     src/obscura64_api.c
@@ -90,7 +92,7 @@ if(MSVC)
 endif()
 add_test(NAME obscura64_v2_envelope COMMAND obscura64_test_v2_envelope)
 
-foreach(v2_test protection legacy)
+foreach(v2_test protection legacy current_user_record)
     add_executable(obscura64_test_v2_${v2_test}
         tests/test_obscura64_v2_${v2_test}.c)
     target_include_directories(obscura64_test_v2_${v2_test} PRIVATE

@@ -1,29 +1,7 @@
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <bcrypt.h>
 #include "obscura64_internal.h"
+#include "obscura64_sha256.h"
 #include <stdlib.h>
 #include <string.h>
-
-obscura64_status obscura64_managed_sha256(const unsigned char *data, size_t n, unsigned char digest[32])
-{
-    BCRYPT_ALG_HANDLE alg=NULL;
-    BCRYPT_HASH_HANDLE hash=NULL;
-    obscura64_status s=OBSCURA64_IO_ERROR;
-    if ((!data && n) || !digest) return OBSCURA64_INVALID_ARGUMENT;
-    if (!BCRYPT_SUCCESS(BCryptOpenAlgorithmProvider(&alg,BCRYPT_SHA256_ALGORITHM,NULL,0)) ||
-        !BCRYPT_SUCCESS(BCryptCreateHash(alg,&hash,NULL,0,NULL,0,0))) goto done;
-    while(n) {
-        ULONG chunk=n>MAXDWORD ? MAXDWORD : (ULONG)n;
-        if (!BCRYPT_SUCCESS(BCryptHashData(hash,(PUCHAR)data,chunk,0))) goto done;
-        data+=chunk; n-=chunk;
-    }
-    if (BCRYPT_SUCCESS(BCryptFinishHash(hash,digest,32,0))) s=OBSCURA64_OK;
-done:
-    if(hash) BCryptDestroyHash(hash);
-    if(alg) BCryptCloseAlgorithmProvider(alg,0);
-    return s;
-}
 
 obscura64_status obscura64_managed_payload_build(const void *data,size_t n,unsigned char **out,size_t *size)
 {
@@ -40,7 +18,7 @@ obscura64_status obscura64_managed_payload_build(const void *data,size_t n,unsig
     memset(p,0,32); memcpy(p,"OB64MP01",8); p[8]=1; p[10]=32;
     for(i=0;i<8;++i) p[16+i]=(unsigned char)(length>>(8*i));
     if(n) memcpy(p+32,data,n);
-    s=obscura64_managed_sha256(p,n+32U,p+n+32U);
+    s=obscura64_sha256_segments(p,n+32U,NULL,0,p+n+32U);
     if(s!=OBSCURA64_OK) { free(p); return s; }
     *out=p; *size=n+64U; return OBSCURA64_OK;
 }
@@ -61,7 +39,7 @@ obscura64_status obscura64_managed_payload_parse(const unsigned char *p,size_t n
     if(stored>SIZE_MAX-64U) return OBSCURA64_INVALID_DATA;
     length=(size_t)stored;
     if(n!=length+64U) return OBSCURA64_INVALID_DATA;
-    s=obscura64_managed_sha256(p,length+32U,digest);
+    s=obscura64_sha256_segments(p,length+32U,NULL,0,digest);
     if(s!=OBSCURA64_OK) return s;
     if(memcmp(digest,p+length+32U,32)) return OBSCURA64_INVALID_DATA;
     *out=p+32; *size=length; return OBSCURA64_OK;

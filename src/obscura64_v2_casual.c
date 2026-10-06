@@ -1,6 +1,7 @@
 #include "obscura64_v2_internal.h"
 #include "obscura64_internal.h"
 #include "obscura64_profiles_v1.h"
+#include "obscura64_sha256.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -12,16 +13,8 @@
 static obscura64_status casual_digest(const unsigned char header[CASUAL_HEADER_SIZE],
     const void *input, size_t length, unsigned char digest[CASUAL_DIGEST_SIZE])
 {
-    unsigned char *joined;
-    obscura64_status status;
-    if (length > SIZE_MAX - CASUAL_HEADER_SIZE) return OBSCURA64_SIZE_OVERFLOW;
-    joined = (unsigned char *)malloc(CASUAL_HEADER_SIZE + length);
-    if (joined == NULL) return OBSCURA64_OUT_OF_MEMORY;
-    memcpy(joined, header, CASUAL_HEADER_SIZE);
-    if (length != 0) memcpy(joined + CASUAL_HEADER_SIZE, input, length);
-    status = obscura64_managed_sha256(joined, CASUAL_HEADER_SIZE + length, digest);
-    free(joined);
-    return status;
+    return obscura64_sha256_segments(header, CASUAL_HEADER_SIZE,
+        input, length, digest);
 }
 
 obscura64_status obscura64_v2_casual_protect_with_profile(uint16_t profile_id,

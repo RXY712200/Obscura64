@@ -20,9 +20,13 @@ int main(void)
         CHECK(obscura64_disaster_scan(encoded,n,&r)==OBSCURA64_DISASTER_SUCCESS&&r.attempts==4096,"genuine exhaustive unique scan");
         QueryPerformanceCounter(&end);
         if(j==0) printf("4096 scan / 4096-byte payload: %.3f ms\n",1000.0*(double)(end.QuadPart-start.QuadPart)/(double)frequency.QuadPart);
+        CHECK(r.candidates>=1&&r.candidates<64&&r.full_decodes==r.candidates+1,
+            "only filtered candidates receive full decode");
+        printf("Profile %u: %zu candidates, %zu full decodes of 4096 considered\n",
+            (unsigned)ids[j], r.candidates, r.full_decodes);
         CHECK(r.profile_id==ids[j]&&!memcmp(r.profile,obscura64_profiles_v1[ids[j]],64)&&r.payload_size==sizeof(payload)&&!memcmp(r.payload,payload,sizeof(payload)),"exact Profile ID Profile and application bytes");
         obscura64_free(r.payload);
-        if(j==0) CHECK(obscura64_disaster_scan_candidates(encoded,n,duplicate,2,&r)==OBSCURA64_DISASTER_AMBIGUOUS&&r.payload==NULL&&r.payload_size==0&&r.attempts==2,"duplicate test candidates refuse ambiguity");
+        if(j==0) CHECK(obscura64_disaster_scan_candidates(encoded,n,duplicate,2,&r)==OBSCURA64_DISASTER_AMBIGUOUS&&r.payload==NULL&&r.payload_size==0&&r.attempts==2&&r.candidates==2&&r.full_decodes==2,"duplicate test candidates refuse ambiguity");
         encoded[0]=encoded[0]=='A'?'B':'A';
         CHECK(obscura64_disaster_scan(encoded,n,&r)==OBSCURA64_DISASTER_NOT_FOUND&&r.payload==NULL,"corrupt managed input no match");
         obscura64_free(encoded); encoded=NULL;
@@ -36,5 +40,20 @@ int main(void)
     }
     CHECK(obscura64_disaster_scan("AAAA",4,&r)==OBSCURA64_DISASTER_NOT_FOUND,"arbitrary alphabet no match");
     CHECK(obscura64_disaster_scan(NULL,0,&r)==OBSCURA64_DISASTER_NOT_FOUND,"empty encoded input not envelope");
+    {
+        char malformed[88];
+        memset(malformed,'A',sizeof(malformed));
+        CHECK(obscura64_disaster_scan(malformed,sizeof(malformed),&r)==
+            OBSCURA64_DISASTER_NOT_FOUND&&r.attempts==4096&&r.full_decodes==0,
+            "common alphabet wrong prefix considers all without full decode");
+        malformed[50]='0';
+        CHECK(obscura64_disaster_scan(malformed,sizeof(malformed),&r)==
+            OBSCURA64_DISASTER_NOT_FOUND&&r.attempts==0,
+            "invalid pool byte cheap reject");
+        malformed[50]='A'; malformed[4]='=';
+        CHECK(obscura64_disaster_scan(malformed,sizeof(malformed),&r)==
+            OBSCURA64_DISASTER_NOT_FOUND&&r.attempts==0,
+            "invalid padding position cheap reject");
+    }
     printf("PASS: %u disaster checks\n",checks); return 0;
 }

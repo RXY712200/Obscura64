@@ -7,6 +7,10 @@
 - Added automatic V2 protection dispatch and supported V1 builtin Managed
   Payload recognition, success classification, and narrow V1-to-V2 migration.
 - Preserved the frozen Profile Library and released V1 APIs/formats.
+- Independent-review correction: CurrentUser now validates a versioned inner
+  record and digest after DPAPI succeeds; automatic V1 recognition filters
+  candidates by the fixed Managed Payload prefix before full decoding.
+  SHA-256 moved to a shared private helper without changing V1 or Casual bytes.
 
 ## 2.0.0-preview.1 — V2 foundation
 

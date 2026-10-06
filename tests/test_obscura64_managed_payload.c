@@ -1,4 +1,5 @@
 #include "obscura64_test_recovery_helpers.h"
+#include "obscura64_sha256.h"
 
 static unsigned int provider_calls;
 static int fail_codec;
@@ -40,7 +41,7 @@ int main(void)
     CHECK(envelope[16]==1&&envelope[17]==16,"little endian payload length 4097");
     for(i=12;i<16;++i) CHECK(envelope[i]==0,"flags zero");
     for(i=18;i<32;++i) CHECK(envelope[i]==0,"high length and reserved zero");
-    CHECK(obscura64_managed_sha256(envelope,size-32,hash)==OBSCURA64_OK&&!memcmp(hash,envelope+size-32,32),"exact SHA header plus payload coverage");
+    CHECK(obscura64_sha256_segments(envelope,size-32,NULL,0,hash)==OBSCURA64_OK&&!memcmp(hash,envelope+size-32,32),"exact SHA header plus payload coverage");
     memset(out,0xa5,sizeof(out)); memcpy(before,out,sizeof(out));
     CHECK(obscura64_managed_decode(a,encoded,n,out,1,&actual)==OBSCURA64_BUFFER_TOO_SMALL&&actual==sizeof(input)&&!memcmp(out,before,sizeof(out)),"decode too small unchanged");
     CHECK(obscura64_managed_encode(a,input,sizeof(input),(char *)out,1,&actual)==OBSCURA64_BUFFER_TOO_SMALL&&actual==n&&!memcmp(out,before,sizeof(out)),"encode too small unchanged");

@@ -13,8 +13,9 @@ Obscura64 is a Windows C11 library for software-internal local data. Its Casual 
 
 Choose a protection semantic explicitly: `NONE` leaves bytes plain, `CASUAL`
 provides reversible obfuscation with corruption checks, and `CURRENT_USER`
-delegates genuine user-bound protection to Windows DPAPI. Casual is not
-encryption; Obscura64 does not invent cryptography.
+delegates genuine user-bound protection to Windows DPAPI and validates an
+inner Obscura64 record after decryption. Casual is not encryption; Obscura64
+does not invent cryptography.
 
 ## V2 Quick Start
 

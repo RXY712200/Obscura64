@@ -1,6 +1,7 @@
 #include "obscura64.h"
 #include "obscura64_profiles_v1.h"
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -112,6 +113,44 @@ static int legacy_profile(uint16_t id, const void *input, size_t input_len)
     return 0;
 }
 
+static int large_legacy_payload(void)
+{
+    const size_t payload_len = 256U * 1024U;
+    unsigned char *payload = (unsigned char *)malloc(payload_len);
+    obscura64_context *context = NULL;
+    obscura64_disaster_result found = {0};
+    char *legacy = NULL;
+    void *decoded = NULL;
+    size_t legacy_len = 0, decoded_len = 0, i;
+    obscura64_data_format format = OBSCURA64_FORMAT_UNKNOWN;
+    CHECK("large fixture allocation", payload != NULL);
+    for (i = 0; i < payload_len; ++i) payload[i] = (unsigned char)(i * 37U);
+    CHECK("large builtin context", obscura64_context_create_from_profile(
+        (const char *)obscura64_profiles_v1[137], OBSCURA64_PROFILE_SIZE,
+        &context) == OBSCURA64_OK);
+    CHECK("large V1 Managed encode", obscura64_managed_encode_alloc(context,
+        payload, payload_len, &legacy, &legacy_len) == OBSCURA64_OK);
+    CHECK("large scanner unique match", obscura64_disaster_scan(legacy,
+        legacy_len, &found) == OBSCURA64_DISASTER_SUCCESS &&
+        found.attempts == OBSCURA64_PROFILE_COUNT && found.profile_id == 137 &&
+        found.candidates >= 1 && found.candidates < 64 &&
+        found.full_decodes == found.candidates + 1 &&
+        found.payload_size == payload_len &&
+        memcmp(found.payload, payload, payload_len) == 0);
+    printf("Large V1 fixture: %zu candidates, %zu full decodes of %zu considered\n",
+        found.candidates, found.full_decodes, found.attempts);
+    obscura64_free(found.payload);
+    CHECK("large automatic V1 read", obscura64_unprotect_alloc_ex(legacy,
+        legacy_len, &decoded, &decoded_len, &format) == OBSCURA64_OK &&
+        format == OBSCURA64_FORMAT_V1_LEGACY_UPGRADE_RECOMMENDED &&
+        decoded_len == payload_len && memcmp(decoded, payload, payload_len) == 0);
+    obscura64_free(decoded);
+    obscura64_free(legacy);
+    obscura64_context_destroy(context);
+    free(payload);
+    return 0;
+}
+
 int main(void)
 {
     const unsigned char payload[] = {0, 255, 0, 'L', 'G'};
@@ -122,6 +161,7 @@ int main(void)
     CHECK("nontrivial Profile", legacy_profile(137, payload, sizeof(payload)) == 0);
     CHECK("Profile 4095", legacy_profile(4095, payload, sizeof(payload)) == 0);
     CHECK("empty legacy payload", legacy_profile(0, NULL, 0) == 0);
+    CHECK("large legacy fixture", large_legacy_payload() == 0);
     CHECK("not legacy", obscura64_unprotect_alloc_ex("AAAA", 4,
         &out, &length, &format) == OBSCURA64_UNRECOGNIZED_DATA &&
         out == NULL && length == 0 && format == OBSCURA64_FORMAT_UNKNOWN);

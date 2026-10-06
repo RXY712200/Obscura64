@@ -245,6 +245,8 @@ const char *obscura64_status_string(obscura64_status status)
         return "multiple V1 builtin Profiles matched";
     case OBSCURA64_LEGACY_SCAN_FAILURE:
         return "V1 builtin Managed Payload scan failed";
+    case OBSCURA64_PROTECTED_CORRUPT:
+        return "invalid or corrupted protected payload";
     default:
         return "unknown status";
     }

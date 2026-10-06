@@ -39,7 +39,8 @@ typedef enum obscura64_status {
     OBSCURA64_PROTECTION_FAILURE,
     OBSCURA64_UNRECOGNIZED_DATA,
     OBSCURA64_LEGACY_AMBIGUOUS,
-    OBSCURA64_LEGACY_SCAN_FAILURE
+    OBSCURA64_LEGACY_SCAN_FAILURE,
+    OBSCURA64_PROTECTED_CORRUPT
 } obscura64_status;
 
 typedef struct obscura64_context obscura64_context;

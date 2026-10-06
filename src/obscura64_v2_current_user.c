@@ -35,21 +35,28 @@ obscura64_status obscura64_v2_current_user_protect(const void *input,
     size_t length, void **body, size_t *body_len)
 {
     DATA_BLOB source, protected_blob = {0, NULL};
-    unsigned char empty = 0;
+    unsigned char *record = NULL;
+    size_t record_len = 0;
     obscura64_status status;
     if (body != NULL) *body = NULL;
     if (body_len != NULL) *body_len = 0;
     if (body == NULL || body_len == NULL || (input == NULL && length != 0))
         return OBSCURA64_INVALID_ARGUMENT;
-    if (length > MAXDWORD) return OBSCURA64_SIZE_OVERFLOW;
-    source.cbData = (DWORD)length;
-    source.pbData = (BYTE *)(length != 0 ? input : &empty);
+    status = obscura64_v2_current_user_record_build(input, length,
+        &record, &record_len);
+    if (status != OBSCURA64_OK) return status;
+    source.cbData = (DWORD)record_len; /* Builder checks the complete record. */
+    source.pbData = record;
     if (!CryptProtectData(&source, NULL, NULL, NULL, NULL,
         CRYPTPROTECT_UI_FORBIDDEN, &protected_blob)) {
         status = dpapi_error();
+        SecureZeroMemory(record, record_len);
+        free(record);
         LocalFree(protected_blob.pbData);
         return status;
     }
+    SecureZeroMemory(record, record_len);
+    free(record);
     status = copy_windows_blob(&protected_blob, body, body_len);
     LocalFree(protected_blob.pbData);
     return status;
@@ -60,6 +67,8 @@ obscura64_status obscura64_v2_current_user_unprotect(const void *body,
 {
     DATA_BLOB source, plain_blob = {0, NULL};
     unsigned char empty = 0;
+    const unsigned char *payload = NULL;
+    size_t payload_len = 0;
     obscura64_status status;
     if (output != NULL) *output = NULL;
     if (output_len != NULL) *output_len = 0;
@@ -74,7 +83,15 @@ obscura64_status obscura64_v2_current_user_unprotect(const void *body,
         LocalFree(plain_blob.pbData);
         return status;
     }
-    status = copy_windows_blob(&plain_blob, output, output_len);
+    status = obscura64_v2_current_user_record_parse(plain_blob.pbData,
+        (size_t)plain_blob.cbData, &payload, &payload_len);
+    if (status == OBSCURA64_OK && payload_len != 0) {
+        *output = malloc(payload_len);
+        if (*output == NULL) status = OBSCURA64_OUT_OF_MEMORY;
+        else { memcpy(*output, payload, payload_len); *output_len = payload_len; }
+    }
+    if (plain_blob.pbData != NULL)
+        SecureZeroMemory(plain_blob.pbData, plain_blob.cbData);
     LocalFree(plain_blob.pbData);
     return status;
 }

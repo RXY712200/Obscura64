@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <windows.h>
+#include <wincrypt.h>
 
 static unsigned int checks;
 #define CHECK(label, ok) do { ++checks; if (!(ok)) { \
@@ -90,6 +91,7 @@ static int current_user(void)
     unsigned char output[sizeof(raw)];
     unsigned char protected_buffer[1024];
     obscura64_data_format format = OBSCURA64_FORMAT_UNKNOWN;
+    obscura64_status status;
     CHECK("CurrentUser protect", obscura64_protect_alloc(OBSCURA64_PROTECTION_CURRENT_USER,
         raw, sizeof(raw), &wire, &wire_len) == OBSCURA64_OK && wire_len > 24);
     memset(protected_buffer, 0xA5, sizeof(protected_buffer));
@@ -113,9 +115,30 @@ static int current_user(void)
     CHECK("DPAPI truncated body", obscura64_unprotect_alloc(wire, 24,
         &plain, &plain_len) == OBSCURA64_ENVELOPE_CORRUPT && plain == NULL);
     ((unsigned char *)wire)[24] ^= 1;
-    CHECK("DPAPI corrupted body", obscura64_unprotect_alloc(wire, wire_len,
-        &plain, &plain_len) == OBSCURA64_PROTECTION_FAILURE && plain == NULL);
+    status = obscura64_unprotect_alloc(wire, wire_len, &plain, &plain_len);
+    CHECK("DPAPI corrupted body", (status == OBSCURA64_PROTECTION_FAILURE ||
+        status == OBSCURA64_PROTECTED_CORRUPT) && plain == NULL);
     obscura64_free(wire); wire = NULL;
+    {
+        unsigned char *record = NULL;
+        size_t record_len = 0;
+        DATA_BLOB source, sealed = {0, NULL};
+        CHECK("build inner record for integration", obscura64_v2_current_user_record_build(
+            raw, sizeof(raw), &record, &record_len) == OBSCURA64_OK);
+        record[0] ^= 1; /* DPAPI succeeds, but Obscura64 validation must fail. */
+        source.cbData = (DWORD)record_len;
+        source.pbData = record;
+        CHECK("protect invalid inner record with real DPAPI", CryptProtectData(&source,
+            NULL, NULL, NULL, NULL, CRYPTPROTECT_UI_FORBIDDEN, &sealed) != 0);
+        obscura64_free(record);
+        CHECK("wrap invalid protected record", obscura64_v2_envelope_build(2,
+            sealed.pbData, sealed.cbData, &wire, &wire_len) == OBSCURA64_OK);
+        LocalFree(sealed.pbData);
+        CHECK("DPAPI success does not bypass inner validation",
+            obscura64_unprotect_alloc(wire, wire_len, &plain, &plain_len) ==
+            OBSCURA64_PROTECTED_CORRUPT && plain == NULL && plain_len == 0);
+        obscura64_free(wire); wire = NULL;
+    }
     CHECK("empty DPAPI protect", obscura64_protect_alloc(OBSCURA64_PROTECTION_CURRENT_USER,
         NULL, 0, &wire, &wire_len) == OBSCURA64_OK);
     CHECK("empty DPAPI unprotect", obscura64_unprotect_alloc(wire, wire_len,

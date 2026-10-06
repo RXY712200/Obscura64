@@ -34,17 +34,44 @@ requires no metadata argument. On failure the optional classification is
 | `CASUAL` (kind 1) | Self-contained Profile encoding and SHA-256 corruption validation | Reversible obfuscation, not encryption or attacker authentication; a knowledgeable writer can recompute the digest |
 | `CURRENT_USER` (kind 2) | Windows current-user DPAPI protected blob | OS-provided user-bound protection; not portable or a server trust boundary |
 
-CurrentUser calls `CryptProtectData` and `CryptUnprotectData` with
+CurrentUser puts a small, validated Obscura64 plaintext record **inside** the
+raw DPAPI blob. It calls `CryptProtectData` and `CryptUnprotectData` with
 `CRYPTPROTECT_UI_FORBIDDEN`, no optional entropy, and **without**
 `CRYPTPROTECT_LOCAL_MACHINE`. Windows owns DPAPI output until released with
 `LocalFree`; Obscura64 copies it into a public `obscura64_free` allocation.
-The input is checked against `DWORD` limits before narrowing. A DPAPI
-unprotect failure returns `OBSCURA64_PROTECTION_FAILURE` unless Windows
-unambiguously reports out-of-memory. It does not guess wrong-user versus
-corrupt-blob. Copying an envelope to another user or machine is not promised
-to work. Local tests do not establish cross-user or cross-machine behavior.
+The complete plaintext record is checked against `DWORD` limits before
+narrowing. A DPAPI unprotect failure returns `OBSCURA64_PROTECTION_FAILURE`
+unless Windows unambiguously reports out-of-memory. It does not guess
+wrong-user versus corrupt-blob. A successful DPAPI unprotect must also pass
+the inner record's
+exact structure and SHA-256 digest, or `OBSCURA64_PROTECTED_CORRUPT` is
+returned. Windows documents that DPAPI can sometimes succeed with corrupted
+output; the inner validation catches that case. Copying an envelope to another
+user or machine is not promised to work. Local tests do not establish
+cross-user or cross-machine behavior.
 DPAPI protects bytes in the current user's Windows environment; it does not
 make client-side state authoritative to a server.
+
+### CurrentUser plaintext record V1
+
+The outer V2 kind-2 body remains a raw DPAPI blob. Inside its encrypted
+plaintext is this canonical record, with no external state or user ID:
+
+| Plaintext offset | Bytes | Field |
+| --- | ---: | --- |
+| 0 | 8 | Magic `OB64CU01` |
+| 8 | 2 | Record version = 1, little-endian |
+| 10 | 2 | Header size = 56, little-endian |
+| 12 | 4 | Flags = 0 |
+| 16 | 8 | Exact application payload length, little-endian |
+| 24 | 32 | SHA-256 of bytes 0–23 followed by application payload |
+| 56 | remainder | Application bytes |
+
+Exact length, fixed fields, and digest are required. Empty application bytes
+produce a 56-byte record. The digest checks Obscura64 data after DPAPI returns;
+it does not make client-side data authoritative. An authorized local process
+can itself call DPAPI and create valid protected data. This is not DRM or
+anti-cheat.
 
 ## Casual body V1
 
@@ -78,14 +105,20 @@ remain advanced/legacy facilities.
 
 An input beginning with the full eight-byte `OB64ENV2` magic is always parsed
 as V2. Malformed or unsupported V2 input never falls through to V1 scanning.
-Otherwise, the existing builtin disaster scanner evaluates **all 4096** frozen
-Profiles and validates the decoded V1 Managed Payload structure and SHA-256.
-Exactly one match succeeds and reports legacy/upgrade recommended. Zero
-matches return `OBSCURA64_UNRECOGNIZED_DATA`; multiple matches return
+Otherwise, the shared builtin disaster scanner first rejects impossible V1
+Managed inputs: fewer than 88 bytes, length not divisible by four, characters
+outside the frozen pool, or invalid `=` positions. It then considers **all
+4096** frozen Profiles against the first 20 encoded characters. Those
+characters derive solely from the first 15 fixed bytes of the canonical V1
+Managed Payload header. Only prefix candidates receive a full decode and
+strict V1 Managed Payload structure/SHA-256 validation. A prefix match alone
+never establishes validity. Exactly one match succeeds and reports
+legacy/upgrade recommended. Zero matches return
+`OBSCURA64_UNRECOGNIZED_DATA`; multiple matches return
 `OBSCURA64_LEGACY_AMBIGUOUS`. A scanner failure returns
-`OBSCURA64_LEGACY_SCAN_FAILURE`. The scan can be substantially slower than a
-normal V2 read; valid V2 envelopes never run it. No readability or text
-heuristic is used.
+`OBSCURA64_LEGACY_SCAN_FAILURE`. The optimized scan still considers 4096
+Profiles and can be slower than a normal V2 read; valid V2 envelopes never
+run it. No readability or text heuristic is used.
 
 `obscura64_migrate_v1_managed_alloc` performs the narrow supported path:
 unique builtin V1 Managed Payload decode, then application bytes protected
