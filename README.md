@@ -5,13 +5,24 @@
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-blue)
 ![Language: C11](https://img.shields.io/badge/language-C11-blue)
 
-**Obscura64 1.0.0** — Windows C11 source release.
+**Obscura64 2.0.0-preview.1** — Windows C11 development source. The immutable
+[v1.0.0 release](https://github.com/RXY712200/Obscura64/releases/tag/v1.0.0)
+remains available for released V1 behavior.
 
 Obscura64 is a lightweight reversible obfuscation library for software-internal local data. It raises the effort needed for casual inspection and manual editing: fields such as `coins=1000`, `level=20`, and `unlock=0` become encoded bytes that are less immediately readable.
 
 Obscura64 is **NOT encryption**. It is not designed to resist professional reverse engineering, knowledgeable attackers, or deliberate cryptanalysis.
 
-## Current Features
+## V2 Preview 1
+
+The new `obscura64_protect` / `obscura64_unprotect` API accepts arbitrary bytes
+without a project directory or Profile. Its first envelope uses an explicit
+**unprotected preview body** to validate the V2 format. It must not be used for
+sensitive data. [Format and API details](docs/V2_PREVIEW1.md) describe the
+strict parser and compatibility boundary. Casual and Windows CurrentUser
+protection are planned for Preview 2.
+
+## V1 Features and Compatibility
 
 - Windows-only C11 library with a C and C++ callable public header and opaque context.
 - Custom Profile-based Base64-style codec and a frozen library of 4096 unique Profiles.
@@ -25,6 +36,7 @@ Obscura64 is **NOT encryption**. It is not designed to resist professional rever
 
 ## Documentation
 
+- [V2 Preview 1 format, API, security boundary, and V1 compatibility](docs/V2_PREVIEW1.md)
 - [Documentation index](docs/README.md)
 - [V1 specification](docs/OBSCURA64_V1_SPEC.md)
 - [Managed Payload V1](docs/MANAGED_PAYLOAD_V1.md)
@@ -33,7 +45,7 @@ Obscura64 is **NOT encryption**. It is not designed to resist professional rever
 - [Published v1.0.0 Release](https://github.com/RXY712200/Obscura64/releases/tag/v1.0.0)
 - [Issue #1 — Development Log, Known Issues & Roadmap](https://github.com/RXY712200/Obscura64/issues/1)
 
-## Quick Start (Managed Payload recommended)
+## V1 Quick Start (Managed Payload)
 
 Include `obscura64.h` and pass an **existing project directory** as a UTF-8 path. This example accepts that directory as its command-line argument:
 
@@ -157,7 +169,7 @@ V1 development stages and release preparation are complete. Frozen Profile Libra
 
 File-helper APIs, streaming and encryption are not implemented. Optional examples can be built with `OBSCURA64_BUILD_EXAMPLES=ON`; this is not required for source integration.
 
-See [current format](docs/PROJECT_STATE_V1.md), [history format](docs/PROJECT_HISTORY_V1.md), and the [release checklist](docs/RELEASE_CHECKLIST_V1.md). The verified environment is MinGW GCC/G++ 10.2.0, i686 Windows. MSVC, Clang, x64 and CMake/CTest execution are not claimed.
+See [current format](docs/PROJECT_STATE_V1.md), [history format](docs/PROJECT_HISTORY_V1.md), and the [release checklist](docs/RELEASE_CHECKLIST_V1.md). The v1.0.0 release was verified with MinGW GCC/G++ 10.2.0 on i686 Windows. Preview 1 additionally passed manual GCC/G++ 16.2.0 x64 Windows builds and tests. MSVC, Clang, and CMake/CTest execution are not claimed.
 
 ## License
 

@@ -5,9 +5,10 @@
 
 #include <stddef.h>
 
-#define OBSCURA64_VERSION_MAJOR 1
+#define OBSCURA64_VERSION_MAJOR 2
 #define OBSCURA64_VERSION_MINOR 0
 #define OBSCURA64_VERSION_PATCH 0
+#define OBSCURA64_VERSION_PRERELEASE "preview.1"
 #define OBSCURA64_PROFILE_LIBRARY_VERSION 1
 #define OBSCURA64_PROFILE_SIZE 64
 #define OBSCURA64_PROVIDER_ABI_VERSION 1
@@ -30,10 +31,37 @@ typedef enum obscura64_status {
     OBSCURA64_STATE_CORRUPT,
     OBSCURA64_RNG_FAILURE,
     OBSCURA64_BUSY,
-    OBSCURA64_UNRECOVERABLE
+    OBSCURA64_UNRECOVERABLE,
+    OBSCURA64_ENVELOPE_CORRUPT,
+    OBSCURA64_UNSUPPORTED_VERSION,
+    OBSCURA64_UNSUPPORTED_PROTECTION
 } obscura64_status;
 
 typedef struct obscura64_context obscura64_context;
+
+/* V2 ordinary byte API. Preview 1 emits a canonical, unprotected envelope:
+ * it provides no confidentiality, integrity, or authentication. The default
+ * protection changes in a later preview; persist Preview 1 output only with
+ * that limitation understood. No project directory or V1 context is needed.
+ * Input and output buffers must not overlap. A NULL input is valid only with
+ * zero length. Caller-buffer failures leave bytes unchanged; BUFFER_TOO_SMALL
+ * reports required size, all other failures set output_len to zero. NULL
+ * output with zero capacity queries size. Allocating failures clear both
+ * outputs; release a successful allocation with obscura64_free. */
+obscura64_status obscura64_protected_size(size_t input_len, size_t *output_len);
+obscura64_status obscura64_unprotected_size(
+    const void *protected_data, size_t protected_len, size_t *output_len);
+obscura64_status obscura64_protect(
+    const void *input, size_t input_len, void *output,
+    size_t output_capacity, size_t *output_len);
+obscura64_status obscura64_unprotect(
+    const void *protected_data, size_t protected_len, void *output,
+    size_t output_capacity, size_t *output_len);
+obscura64_status obscura64_protect_alloc(
+    const void *input, size_t input_len, void **output, size_t *output_len);
+obscura64_status obscura64_unprotect_alloc(
+    const void *protected_data, size_t protected_len,
+    void **output, size_t *output_len);
 
 /* Common contracts: contexts are owned by the caller and released with
  * obscura64_context_destroy; constructors/open/Force clear *out_context on

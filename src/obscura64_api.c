@@ -229,6 +229,12 @@ const char *obscura64_status_string(obscura64_status status)
         return "project operation busy";
     case OBSCURA64_UNRECOVERABLE:
         return "managed project state cannot be recovered";
+    case OBSCURA64_ENVELOPE_CORRUPT:
+        return "malformed V2 envelope";
+    case OBSCURA64_UNSUPPORTED_VERSION:
+        return "unsupported V2 envelope version";
+    case OBSCURA64_UNSUPPORTED_PROTECTION:
+        return "unsupported V2 protection kind";
     default:
         return "unknown status";
     }

@@ -5,6 +5,7 @@ compatibility notes for Obscura64. Obscura64 is reversible obfuscation, **not en
 
 ## Start here
 
+- [V2 Preview 1](V2_PREVIEW1.md)
 - [Project README](../README.md)
 - [V1 specification](OBSCURA64_V1_SPEC.md)
 - [Managed Payload V1](MANAGED_PAYLOAD_V1.md)
@@ -47,5 +48,6 @@ compatibility notes for Obscura64. Obscura64 is reversible obfuscation, **not en
 
 [Issue #1 — Development Log, Known Issues & Roadmap](https://github.com/RXY712200/Obscura64/issues/1)
 tracks the current state, known validation gaps, and chronological maintenance
-updates. Real CMake/CTest, native x64, MSVC, and Clang validation remain open work;
-they are not currently known v1.0.0 functional defects.
+updates. Real CMake/CTest, MSVC, and Clang validation remain open work; Preview 1
+was manually built and tested with GCC/G++ 16.2.0 on x64 Windows. The open
+validation items are not currently known v1.0.0 functional defects.

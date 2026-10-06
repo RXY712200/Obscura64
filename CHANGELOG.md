@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.0-preview.1 — V2 foundation
+
+- Added a canonical self-describing V2 byte envelope and ordinary
+  `protect`/`unprotect` APIs with strict parsing and structural diagnostics.
+- The Preview 1 representation is explicitly unprotected; Casual and DPAPI
+  protection, V1 migration, and V2 file tooling are future preview work.
+- Preserved V1 public entry points, wire formats, and frozen Profile artifacts.
+
 ## 1.0.0
 
 Obscura64 1.0.0 source release.

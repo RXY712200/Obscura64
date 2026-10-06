@@ -9,6 +9,7 @@ set(OBSCURA64_DEFAULT_PROVIDER_SYMBOL "" CACHE STRING
     "Optional symbol naming the compile-time default obscura64_provider instance")
 
 add_library(obscura64 STATIC
+    src/obscura64_v2_envelope.c
     src/obscura64_core.c
     src/obscura64_codec.c
     src/obscura64_api.c
@@ -77,6 +78,13 @@ if(MSVC)
 endif()
 
 add_test(NAME obscura64_smoke COMMAND obscura64_test_smoke)
+
+add_executable(obscura64_test_v2_envelope tests/test_obscura64_v2_envelope.c)
+target_link_libraries(obscura64_test_v2_envelope PRIVATE obscura64_test_support)
+if(MSVC)
+    target_compile_options(obscura64_test_v2_envelope PRIVATE /W4)
+endif()
+add_test(NAME obscura64_v2_envelope COMMAND obscura64_test_v2_envelope)
 
 add_executable(obscura64_test_profile
     tests/test_obscura64_profile.c
