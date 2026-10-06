@@ -31,7 +31,7 @@ int main(void)
     void *allocated = (void *)1;
     size_t n = 999;
     CHECK("version", OBSCURA64_VERSION_MAJOR == 2 &&
-        strcmp(OBSCURA64_VERSION_PRERELEASE, "preview.1") == 0);
+        strcmp(OBSCURA64_VERSION_PRERELEASE, "preview.2") == 0);
     CHECK("semantic values", OBSCURA64_PROTECTION_NONE == 0 &&
         OBSCURA64_PROTECTION_CASUAL == 1 && OBSCURA64_PROTECTION_CURRENT_USER == 2);
     CHECK("operation-driven size query", obscura64_protect(OBSCURA64_PROTECTION_NONE,
@@ -40,10 +40,12 @@ int main(void)
         payload, SIZE_MAX, &allocated, &n) == OBSCURA64_SIZE_OVERFLOW && allocated == NULL && n == 0);
     CHECK("null input", obscura64_protect(OBSCURA64_PROTECTION_NONE,
         NULL, 1, data, sizeof(data), &n) == OBSCURA64_INVALID_ARGUMENT && n == 0);
-    CHECK("unsupported Casual", obscura64_protect_alloc(OBSCURA64_PROTECTION_CASUAL,
-        payload, sizeof(payload), &allocated, &n) == OBSCURA64_UNSUPPORTED_PROTECTION && allocated == NULL && n == 0);
-    CHECK("unsupported CurrentUser", obscura64_protect_alloc(OBSCURA64_PROTECTION_CURRENT_USER,
-        payload, sizeof(payload), &allocated, &n) == OBSCURA64_UNSUPPORTED_PROTECTION && allocated == NULL && n == 0);
+    CHECK("Casual now supported", obscura64_protect_alloc(OBSCURA64_PROTECTION_CASUAL,
+        payload, sizeof(payload), &allocated, &n) == OBSCURA64_OK && allocated != NULL && n > sizeof(canonical));
+    obscura64_free(allocated); allocated = NULL;
+    CHECK("CurrentUser now supported", obscura64_protect_alloc(OBSCURA64_PROTECTION_CURRENT_USER,
+        payload, sizeof(payload), &allocated, &n) == OBSCURA64_OK && allocated != NULL && n > sizeof(canonical));
+    obscura64_free(allocated); allocated = NULL;
     CHECK("invalid semantic", obscura64_protect_alloc((obscura64_protection)99,
         payload, sizeof(payload), &allocated, &n) == OBSCURA64_UNSUPPORTED_PROTECTION && allocated == NULL && n == 0);
     memset(data, 0xA5, sizeof(data));
@@ -62,11 +64,11 @@ int main(void)
     CHECK("truncated header", expect_parse(data, 23, OBSCURA64_ENVELOPE_CORRUPT) == 0);
     CHECK("truncated body", expect_parse(data, sizeof(canonical)-1, OBSCURA64_ENVELOPE_CORRUPT) == 0);
     CHECK("trailing data", expect_parse(data, sizeof(canonical)+1, OBSCURA64_ENVELOPE_CORRUPT) == 0);
-    data[0] ^= 1; CHECK("magic", expect_parse(data, sizeof(canonical), OBSCURA64_ENVELOPE_CORRUPT) == 0); data[0] ^= 1;
+    data[0] ^= 1; CHECK("non-V2 fallback", expect_parse(data, sizeof(canonical), OBSCURA64_UNRECOGNIZED_DATA) == 0); data[0] ^= 1;
     data[8] = 3; CHECK("version dispatch", expect_parse(data, sizeof(canonical), OBSCURA64_UNSUPPORTED_VERSION) == 0); data[8] = 2;
     data[10] = 25; CHECK("header size", expect_parse(data, sizeof(canonical), OBSCURA64_ENVELOPE_CORRUPT) == 0); data[10] = 24;
-    data[12] = 1; CHECK("kind dispatch", expect_parse(data, sizeof(canonical), OBSCURA64_UNSUPPORTED_PROTECTION) == 0); data[12] = 0;
-    data[12] = 2; CHECK("CurrentUser not implemented", expect_parse(data, sizeof(canonical), OBSCURA64_UNSUPPORTED_PROTECTION) == 0); data[12] = 0;
+    data[12] = 1; CHECK("Casual dispatch", expect_parse(data, sizeof(canonical), OBSCURA64_CASUAL_CORRUPT) == 0); data[12] = 0;
+    data[12] = 2; CHECK("CurrentUser dispatch", expect_parse(data, sizeof(canonical), OBSCURA64_PROTECTION_FAILURE) == 0); data[12] = 0;
     data[12] = 255; CHECK("unknown kind", expect_parse(data, sizeof(canonical), OBSCURA64_UNSUPPORTED_PROTECTION) == 0); data[12] = 0;
     data[14] = 1; CHECK("unknown flags", expect_parse(data, sizeof(canonical), OBSCURA64_ENVELOPE_CORRUPT) == 0); data[14] = 0;
     memset(output, 0xA5, sizeof(output));
@@ -81,7 +83,7 @@ int main(void)
         payload, sizeof(payload), &allocated, &n) == OBSCURA64_OK && n == sizeof(canonical) && memcmp(allocated, canonical, n) == 0);
     obscura64_free(allocated);
     allocated = (void *)1; n = 123;
-    CHECK("alloc failure clearing", obscura64_unprotect_alloc(data, 2, &allocated, &n) == OBSCURA64_ENVELOPE_CORRUPT && allocated == NULL && n == 0);
+    CHECK("alloc failure clearing", obscura64_unprotect_alloc(data, 2, &allocated, &n) == OBSCURA64_UNRECOGNIZED_DATA && allocated == NULL && n == 0);
     allocated = (void *)1; n = 123;
     CHECK("alloc protect argument clearing", obscura64_protect_alloc(OBSCURA64_PROTECTION_NONE,
         NULL, 1, &allocated, &n) == OBSCURA64_INVALID_ARGUMENT && allocated == NULL && n == 0);

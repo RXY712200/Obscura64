@@ -19,7 +19,8 @@ in an Issue before implementation.
   canonical SHA-256 must remain unchanged:
   `8842cc4aa32bcb300937835f72aaacfd088568d1bfecd01811603c4f16e7280a`.
   Incompatible library changes need an explicit new version, not replacement of V1.
-- Obscura64 is reversible obfuscation, not encryption or authentication. Keep
+- V1 and V2 Casual are reversible obfuscation, not encryption or authentication;
+  V2 CurrentUser delegates protection to Windows DPAPI. Keep
   security claims within the documented scope.
 
 ## Validation
@@ -30,9 +31,10 @@ architecture, commands, results, and any untested areas. The verified v1.0.0
 environment is MinGW GCC/G++ 10.2.0, i686-w64-mingw32, C11, with
 `-Wall -Wextra -Wpedantic`; keep those builds warning-clean.
 
-CMake received static review only in that environment. Real clean Windows
-configure/build/CTest execution, native x64, MSVC, and Clang remain validation
-work. Do not present them as tested until evidence is available. CMake is a
+CMake received static review only in that environment. Preview 2 also passed
+manual GCC/G++ builds and formal tests on x64 Windows. Real clean Windows
+configure/build/CTest execution, MSVC, and Clang remain validation work.
+Do not present them as tested until evidence is available. CMake is a
 development tool, not a runtime dependency; direct source integration remains supported.
 
 ## Pull requests

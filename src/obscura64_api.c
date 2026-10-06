@@ -235,6 +235,16 @@ const char *obscura64_status_string(obscura64_status status)
         return "unsupported V2 envelope version";
     case OBSCURA64_UNSUPPORTED_PROTECTION:
         return "unsupported V2 protection kind";
+    case OBSCURA64_CASUAL_CORRUPT:
+        return "invalid or corrupted V2 Casual body";
+    case OBSCURA64_PROTECTION_FAILURE:
+        return "protection backend failed or cannot unprotect in this context";
+    case OBSCURA64_UNRECOGNIZED_DATA:
+        return "not supported V2 or V1 builtin Managed Payload data";
+    case OBSCURA64_LEGACY_AMBIGUOUS:
+        return "multiple V1 builtin Profiles matched";
+    case OBSCURA64_LEGACY_SCAN_FAILURE:
+        return "V1 builtin Managed Payload scan failed";
     default:
         return "unknown status";
     }

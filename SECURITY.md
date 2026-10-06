@@ -27,12 +27,14 @@ documented failure handling, and other implementation defects may qualify.
 
 ## Explicit non-goals
 
-**Obscura64 is NOT encryption.** It supplies reversible obfuscation and corruption
-validation, not cryptographic confidentiality or authentication. Missing those
-cryptographic properties is an explicit design boundary, not itself a vulnerability.
+V1 and V2 Casual supply reversible obfuscation and corruption validation, not
+cryptographic confidentiality or attacker authentication. V2 `NONE` supplies
+no protection. V2 CurrentUser delegates genuine current-user protection to
+Windows DPAPI; it is not portable and does not make client-side state a server
+trust boundary. Obscura64 does not implement its own encryption algorithm.
 
 Reversibility, public algorithm details, the frozen public Profile Library,
-lack of cryptographic confidentiality or authentication, a knowledgeable
+Casual's lack of cryptographic confidentiality or authentication, a knowledgeable
 writer's ability to recompute public SHA-256 digests, and lack of DRM, anti-cheat,
 or professional reverse-engineering resistance are not vulnerabilities by
 themselves. SHA-256 is not a secret authentication mechanism.

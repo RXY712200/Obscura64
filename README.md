@@ -5,25 +5,51 @@
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-blue)
 ![Language: C11](https://img.shields.io/badge/language-C11-blue)
 
-**Obscura64 2.0.0-preview.1** — Windows C11 development source. The immutable
+**Obscura64 2.0.0-preview.2** — Windows C11 development source. The immutable
 [v1.0.0 release](https://github.com/RXY712200/Obscura64/releases/tag/v1.0.0)
 remains available for released V1 behavior.
 
-Obscura64 is a lightweight reversible obfuscation library for software-internal local data. It raises the effort needed for casual inspection and manual editing: fields such as `coins=1000`, `level=20`, and `unlock=0` become encoded bytes that are less immediately readable.
+Obscura64 is a Windows C11 library for software-internal local data. Its Casual mode raises the effort needed for casual inspection and manual editing: fields such as `coins=1000`, `level=20`, and `unlock=0` become encoded bytes that are less immediately readable.
 
-Obscura64 is **NOT encryption**. It is not designed to resist professional reverse engineering, knowledgeable attackers, or deliberate cryptanalysis.
+Choose a protection semantic explicitly: `NONE` leaves bytes plain, `CASUAL`
+provides reversible obfuscation with corruption checks, and `CURRENT_USER`
+delegates genuine user-bound protection to Windows DPAPI. Casual is not
+encryption; Obscura64 does not invent cryptography.
 
-## V2 Preview 1
+## V2 Quick Start
 
-The new allocation-first `obscura64_protect_alloc` / `obscura64_unprotect_alloc`
-API accepts arbitrary bytes without a project directory or Profile. Protection
-requires an explicit semantic choice; there is no implicit default. Preview 1
-supports only opt-in `OBSCURA64_PROTECTION_NONE`, which produces an
-**unprotected plain body** and must not be used for sensitive data. Caller-buffer
-forms remain available and discover exact size by performing the operation.
-[Format and API details](docs/V2_PREVIEW1.md) describe the strict parser and
-compatibility boundary. Casual and Windows CurrentUser protection are planned
-for Preview 2.
+The allocation-first API needs no project directory, Profile, or V1 Provider:
+
+```c
+#include "obscura64.h"
+#include <string.h>
+
+int main(void)
+{
+    const unsigned char input[] = {0, 1, 255, 0};
+    void *protected_bytes = NULL, *decoded = NULL;
+    size_t protected_len = 0, decoded_len = 0;
+    obscura64_status status = obscura64_protect_alloc(
+        OBSCURA64_PROTECTION_CURRENT_USER, input, sizeof(input),
+        &protected_bytes, &protected_len);
+    if (status == OBSCURA64_OK)
+        status = obscura64_unprotect_alloc(protected_bytes, protected_len,
+            &decoded, &decoded_len);
+    int matches = status == OBSCURA64_OK && decoded_len == sizeof(input) &&
+        memcmp(decoded, input, sizeof(input)) == 0;
+    obscura64_free(decoded);
+    obscura64_free(protected_bytes);
+    return matches ? 0 : 1;
+}
+```
+
+Choose `OBSCURA64_PROTECTION_CASUAL` for portable obscurity without a secret,
+or explicit `NONE` only when no protection is intended. Unprotect identifies
+the V2 kind automatically and can also read supported V1 builtin Managed
+Payload data. [Preview 2 details](docs/V2_PREVIEW2.md) cover security limits,
+legacy recognition, and migration. Caller-buffer forms are available, but a
+size query and retry are separate backend operations; allocation-first use is
+recommended.
 
 ## V1 Features and Compatibility
 
@@ -39,6 +65,7 @@ for Preview 2.
 
 ## Documentation
 
+- [V2 Preview 2 protection and legacy compatibility](docs/V2_PREVIEW2.md)
 - [V2 Preview 1 format, API, security boundary, and V1 compatibility](docs/V2_PREVIEW1.md)
 - [Documentation index](docs/README.md)
 - [V1 specification](docs/OBSCURA64_V1_SPEC.md)
@@ -108,9 +135,9 @@ Stage 6 is complete: a per-user LocalAppData mirror stores the existing current/
 
 ## Security Model
 
-Obscura64 provides reversible obfuscation, not cryptographic confidentiality. Managed Payload, current-state and history SHA-256 digests primarily detect corruption; they are not secret authentication. Someone who understands the format can modify data and recompute the digest.
+V1 and V2 Casual provide reversible obfuscation, not cryptographic confidentiality. V1 Managed Payload, V1 state/history, and V2 Casual SHA-256 digests detect corruption; they are not secret authentication. Someone who understands those formats can modify data and recompute their digests. V2 CurrentUser instead delegates Windows user-bound protection to DPAPI.
 
-Authorization systems, anti-cheat systems, and confidential data must not rely on Obscura64 alone. Neither the algorithm nor the frozen Profile Library is secret. Obscura64 raises the barrier to casual inspection and manual editing; it does not provide tamper-proof storage or authentication.
+Authorization systems and anti-cheat systems must not trust client-side data merely because it is protected locally. Neither the Casual algorithm nor the frozen Profile Library is secret. CurrentUser is tied to the Windows user environment and is not portable or a server trust boundary.
 
 ## Frozen Profile Library
 
@@ -126,9 +153,9 @@ This is a frozen library identity/integrity reference, not a secret or a measure
 
 ## Build
 
-Requirements: Windows, a C11-capable C compiler, and Windows BCrypt/Shell/OLE libraries. Link with `bcrypt`, `shell32`, `ole32`, and `uuid` (`-lbcrypt -lshell32 -lole32 -luuid` with MinGW).
+Requirements: Windows, a C11-capable C compiler, and Windows BCrypt/Crypt32/Shell/OLE libraries. Link with `bcrypt`, `crypt32`, `shell32`, `ole32`, and `uuid` (`-lbcrypt -lcrypt32 -lshell32 -lole32 -luuid` with MinGW).
 
-CMake is a development/build/test tool, not a runtime dependency. To integrate directly into a Windows C/C++ project, add all implementation `.c` files and supporting private headers from `src/`, add `include/` to the compiler include path, and link `bcrypt`, `shell32`, `ole32`, and `uuid`. Compile implementation files as C; callers include only `obscura64.h`.
+CMake is a development/build/test tool, not a runtime dependency. To integrate directly into a Windows C/C++ project, add all implementation `.c` files and supporting private headers from `src/`, add `include/` to the compiler include path, and link `bcrypt`, `crypt32`, `shell32`, `ole32`, and `uuid`. Compile implementation files as C; callers include only `obscura64.h`.
 
 The repository includes a CMake configuration:
 
@@ -170,9 +197,9 @@ V1 development stages and release preparation are complete. Frozen Profile Libra
 - Stage 6: Redundancy / Recovery — complete.
 - Stage 7: Managed Payload / Disaster Recovery / V1 Preparation — complete.
 
-File-helper APIs, streaming and encryption are not implemented. Optional examples can be built with `OBSCURA64_BUILD_EXAMPLES=ON`; this is not required for source integration.
+V2 protected-file helper APIs and streaming are not implemented. CurrentUser uses Windows DPAPI; Obscura64 does not implement a custom encryption algorithm. Optional examples can be built with `OBSCURA64_BUILD_EXAMPLES=ON`; this is not required for source integration.
 
-See [current format](docs/PROJECT_STATE_V1.md), [history format](docs/PROJECT_HISTORY_V1.md), and the [release checklist](docs/RELEASE_CHECKLIST_V1.md). The v1.0.0 release was verified with MinGW GCC/G++ 10.2.0 on i686 Windows. Preview 1 additionally passed manual GCC/G++ 16.2.0 x64 Windows builds and tests. MSVC, Clang, and CMake/CTest execution are not claimed.
+See [current format](docs/PROJECT_STATE_V1.md), [history format](docs/PROJECT_HISTORY_V1.md), and the [release checklist](docs/RELEASE_CHECKLIST_V1.md). The v1.0.0 release was verified with MinGW GCC/G++ 10.2.0 on i686 Windows. Preview 2 passed manual GCC builds and formal tests on i686 (10.2.0) and x64 (16.2.0) Windows. MSVC, Clang, and CMake/CTest execution are not claimed.
 
 ## License
 

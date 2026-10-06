@@ -10,6 +10,10 @@ set(OBSCURA64_DEFAULT_PROVIDER_SYMBOL "" CACHE STRING
 
 add_library(obscura64 STATIC
     src/obscura64_v2_envelope.c
+    src/obscura64_v2_dispatch.c
+    src/obscura64_v2_casual.c
+    src/obscura64_v2_current_user.c
+    src/obscura64_v2_legacy.c
     src/obscura64_core.c
     src/obscura64_codec.c
     src/obscura64_api.c
@@ -41,7 +45,7 @@ if(NOT OBSCURA64_DEFAULT_PROVIDER_SYMBOL STREQUAL "")
 endif()
 
 if(WIN32)
-    target_link_libraries(obscura64 PUBLIC bcrypt shell32 ole32 uuid)
+    target_link_libraries(obscura64 PUBLIC bcrypt crypt32 shell32 ole32 uuid)
 endif()
 
 if(MSVC)
@@ -61,7 +65,7 @@ if(NOT OBSCURA64_DEFAULT_PROVIDER_SYMBOL STREQUAL "")
         OBSCURA64_DEFAULT_PROVIDER_SYMBOL=${OBSCURA64_DEFAULT_PROVIDER_SYMBOL})
 endif()
 if(WIN32)
-    target_link_libraries(obscura64_test_support PUBLIC bcrypt shell32 ole32 uuid)
+    target_link_libraries(obscura64_test_support PUBLIC bcrypt crypt32 shell32 ole32 uuid)
 endif()
 if(MSVC)
     target_compile_options(obscura64_test_support PRIVATE /W4)
@@ -85,6 +89,18 @@ if(MSVC)
     target_compile_options(obscura64_test_v2_envelope PRIVATE /W4)
 endif()
 add_test(NAME obscura64_v2_envelope COMMAND obscura64_test_v2_envelope)
+
+foreach(v2_test protection legacy)
+    add_executable(obscura64_test_v2_${v2_test}
+        tests/test_obscura64_v2_${v2_test}.c)
+    target_include_directories(obscura64_test_v2_${v2_test} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(obscura64_test_v2_${v2_test} PRIVATE obscura64_test_support)
+    if(MSVC)
+        target_compile_options(obscura64_test_v2_${v2_test} PRIVATE /W4)
+    endif()
+    add_test(NAME obscura64_v2_${v2_test} COMMAND obscura64_test_v2_${v2_test})
+endforeach()
 
 add_executable(obscura64_test_profile
     tests/test_obscura64_profile.c
@@ -317,7 +333,7 @@ endif()
 target_include_directories(obscura64_test_failure PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src)
 if(WIN32)
-    target_link_libraries(obscura64_test_failure PRIVATE bcrypt shell32 ole32 uuid)
+    target_link_libraries(obscura64_test_failure PRIVATE bcrypt crypt32 shell32 ole32 uuid)
 endif()
 if(MSVC)
     target_compile_options(obscura64_test_failure PRIVATE /W4)
@@ -336,7 +352,7 @@ foreach(stage6_test redundancy recovery)
     target_include_directories(obscura64_test_${stage6_test} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src)
     if(WIN32)
-        target_link_libraries(obscura64_test_${stage6_test} PRIVATE bcrypt shell32 ole32 uuid)
+        target_link_libraries(obscura64_test_${stage6_test} PRIVATE bcrypt crypt32 shell32 ole32 uuid)
     endif()
     if(MSVC)
         target_compile_options(obscura64_test_${stage6_test} PRIVATE /W4)
@@ -372,7 +388,7 @@ target_compile_definitions(obscura64_test_managed_default PRIVATE OBSCURA64_REDU
     OBSCURA64_DEFAULT_PROVIDER_SYMBOL=obscura64_test_managed_default_provider)
 foreach(target obscura64_test_disaster obscura64_test_managed_default)
     if(WIN32)
-        target_link_libraries(${target} PRIVATE bcrypt shell32 ole32 uuid)
+        target_link_libraries(${target} PRIVATE bcrypt crypt32 shell32 ole32 uuid)
     endif()
     if(MSVC)
         target_compile_options(${target} PRIVATE /W4)

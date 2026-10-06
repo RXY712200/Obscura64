@@ -1,5 +1,8 @@
 # Obscura64 2.0.0-preview.1
 
+This records the tagged Preview 1 baseline. For current Preview 2 behavior,
+see [V2 Preview 2](V2_PREVIEW2.md).
+
 Preview 1 establishes a byte-oriented V2 envelope and ordinary `protect` /
 `unprotect` API. The product remains a local application-data obfuscation and
 protection component, not a serializer, database, backup product, or encryption

@@ -8,7 +8,7 @@
 #define OBSCURA64_VERSION_MAJOR 2
 #define OBSCURA64_VERSION_MINOR 0
 #define OBSCURA64_VERSION_PATCH 0
-#define OBSCURA64_VERSION_PRERELEASE "preview.1"
+#define OBSCURA64_VERSION_PRERELEASE "preview.2"
 #define OBSCURA64_PROFILE_LIBRARY_VERSION 1
 #define OBSCURA64_PROFILE_SIZE 64
 #define OBSCURA64_PROVIDER_ABI_VERSION 1
@@ -34,14 +34,19 @@ typedef enum obscura64_status {
     OBSCURA64_UNRECOVERABLE,
     OBSCURA64_ENVELOPE_CORRUPT,
     OBSCURA64_UNSUPPORTED_VERSION,
-    OBSCURA64_UNSUPPORTED_PROTECTION
+    OBSCURA64_UNSUPPORTED_PROTECTION,
+    OBSCURA64_CASUAL_CORRUPT,
+    OBSCURA64_PROTECTION_FAILURE,
+    OBSCURA64_UNRECOGNIZED_DATA,
+    OBSCURA64_LEGACY_AMBIGUOUS,
+    OBSCURA64_LEGACY_SCAN_FAILURE
 } obscura64_status;
 
 typedef struct obscura64_context obscura64_context;
 
-/* Semantic protection choices. NONE is an explicit, unprotected Preview 1
- * representation. CASUAL and CURRENT_USER are reserved for Preview 2 and
- * currently return UNSUPPORTED_PROTECTION. There is no implicit default. */
+/* Semantic protection choices. NONE is unprotected and explicit opt-in only;
+ * CASUAL is reversible obfuscation; CURRENT_USER delegates to Windows DPAPI.
+ * There is no implicit default. */
 typedef enum obscura64_protection {
     OBSCURA64_PROTECTION_NONE = 0,
     OBSCURA64_PROTECTION_CASUAL = 1,
@@ -49,15 +54,16 @@ typedef enum obscura64_protection {
 } obscura64_protection;
 
 /* V2 ordinary byte API. Allocation-first is recommended: protection backends
- * may determine exact output size only after performing the operation. NONE
- * provides no confidentiality, integrity, or authentication. Unprotect reads
- * the kind from the envelope; it requires no selection by the caller.
+ * may determine exact output size only after performing the operation.
+ * Unprotect reads V2 kind from the envelope or recognizes supported V1 builtin
+ * Managed Payload; it requires no selection by the caller.
  * Input and output buffers must not overlap. NULL input is valid only at zero
  * length. Caller-buffer operations perform the backend operation to discover
  * exact size; BUFFER_TOO_SMALL reports that size, all other failures set
  * output_len to zero. Caller output bytes remain unchanged on failure. NULL
  * output/capacity zero is an operation-driven size query, not a cheap length
- * calculation. Allocating failures clear pointer and length; free successful
+ * calculation. A retry may produce a different size for variable-output
+ * backends. Allocating failures clear pointer and length; free successful
  * results with obscura64_free. Empty unprotect returns NULL/zero. */
 obscura64_status obscura64_protect(
     obscura64_protection protection, const void *input, size_t input_len, void *output,
@@ -70,6 +76,23 @@ obscura64_status obscura64_protect_alloc(
     void **output, size_t *output_len);
 obscura64_status obscura64_unprotect_alloc(
     const void *protected_data, size_t protected_len,
+    void **output, size_t *output_len);
+
+/* Optional success classification; a V1 result should be upgraded. A non-NULL
+ * format output is set only on success and cleared to UNKNOWN on failure. */
+typedef enum obscura64_data_format {
+    OBSCURA64_FORMAT_UNKNOWN = 0,
+    OBSCURA64_FORMAT_V2 = 1,
+    OBSCURA64_FORMAT_V1_LEGACY_UPGRADE_RECOMMENDED = 2
+} obscura64_data_format;
+obscura64_status obscura64_unprotect_alloc_ex(
+    const void *protected_data, size_t protected_len,
+    void **output, size_t *output_len, obscura64_data_format *format);
+
+/* Only V1 builtin Managed Payload is supported. No project state is read or
+ * modified. Custom V1 Providers still require the existing V1 context API. */
+obscura64_status obscura64_migrate_v1_managed_alloc(
+    obscura64_protection protection, const char *legacy_data, size_t legacy_len,
     void **output, size_t *output_len);
 
 /* Common contracts: contexts are owned by the caller and released with
