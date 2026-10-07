@@ -134,12 +134,33 @@ int wmain(int argc, wchar_t **argv)
             status = obscura64_unprotect_alloc_ex(bytes, length,
                 &plain, &plain_len, &format);
             if (status != OBSCURA64_OK) goto fail;
-            printf("valid under available checks\nformat: %s\n", format_name(format));
+            printf("format: %s\n", format_name(format));
             if (format == OBSCURA64_FORMAT_V2) {
                 obscura64_inspection info;
                 status = obscura64_inspect_bytes(bytes, length, &info);
                 if (status != OBSCURA64_OK) goto fail;
                 printf("protection: %s\n", protection_name(info.protection_kind));
+                switch (info.protection_kind) {
+                case OBSCURA64_PROTECTION_NONE:
+                    printf("verification: structurally valid V2 NONE "
+                        "(canonical envelope and exact length)\n"
+                        "integrity: not provided by NONE\n");
+                    break;
+                case OBSCURA64_PROTECTION_CASUAL:
+                    printf("verification: Casual format/digest valid\n"
+                        "authentication: not provided\n");
+                    break;
+                case OBSCURA64_PROTECTION_CURRENT_USER:
+                    printf("verification: valid under current Windows DPAPI context\n"
+                        "inner record: valid\n");
+                    break;
+                default:
+                    status = OBSCURA64_UNSUPPORTED_PROTECTION;
+                    goto fail;
+                }
+            } else {
+                printf("verification: V1 Managed format/digest valid\n"
+                    "authenticity: not cryptographically established\n");
             }
         }
     }

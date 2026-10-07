@@ -3,7 +3,7 @@
 ## Supported versions
 
 The stable **1.x** release is supported. Security reports about the current
-**2.0.0-preview.3 development source** are also accepted, but that preview is
+**2.0.0-preview.4 development source** are also accepted, but that preview is
 not a stable release. Reports should identify the exact version, tag, or
 commit; this policy does not promise a response deadline.
 

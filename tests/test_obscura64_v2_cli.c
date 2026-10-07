@@ -107,7 +107,9 @@ int main(int argc, char **argv)
         strstr(log, "V1 legacy") && strstr(log, "upgrade recommended: yes"));
     swprintf(args, MAX_PATH * 5, L"verify \"%ls\"", target);
     CHECK(run(exe, args, &code, log) && code == 0 &&
-        strstr(log, "valid under available checks") &&
+        strstr(log, "verification: V1 Managed format/digest valid") &&
+        strstr(log, "authenticity: not cryptographically established") &&
+        !strstr(log, "valid under available checks") &&
         !strstr(log, "SECRET"));
     swprintf(args, MAX_PATH * 5, L"upgrade \"%ls\" --to casual", target);
     CHECK(run(exe, args, &code, log) && code == 0 &&
@@ -133,6 +135,15 @@ int main(int argc, char **argv)
     CHECK(same_file(backup, legacy, legacy_len));
     for (semantic = OBSCURA64_PROTECTION_NONE;
          semantic <= OBSCURA64_PROTECTION_CURRENT_USER; ++semantic) {
+        const char *verification = semantic == OBSCURA64_PROTECTION_NONE ?
+            "verification: structurally valid V2 NONE (canonical envelope and exact length)" :
+            semantic == OBSCURA64_PROTECTION_CASUAL ?
+            "verification: Casual format/digest valid" :
+            "verification: valid under current Windows DPAPI context";
+        const char *limit = semantic == OBSCURA64_PROTECTION_NONE ?
+            "integrity: not provided by NONE" :
+            semantic == OBSCURA64_PROTECTION_CASUAL ?
+            "authentication: not provided" : "inner record: valid";
         void *created = NULL;
         size_t created_len = 0;
         CHECK(obscura64_protect_alloc((obscura64_protection)semantic,
@@ -145,7 +156,9 @@ int main(int argc, char **argv)
             !strstr(log, "SECRET"));
         swprintf(args, MAX_PATH * 5, L"verify \"%ls\"", target);
         CHECK(run(exe, args, &code, log) && code == 0 &&
-            strstr(log, "valid under available checks") && !strstr(log, "SECRET"));
+            strstr(log, verification) && strstr(log, limit) &&
+            !strstr(log, "valid under available checks") &&
+            !strstr(log, "SECRET"));
         obscura64_free(created);
     }
     CHECK(obscura64_file_read_all(target, &protected_bytes, &protected_len) == OBSCURA64_OK);
