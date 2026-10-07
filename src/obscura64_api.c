@@ -247,6 +247,8 @@ const char *obscura64_status_string(obscura64_status status)
         return "V1 builtin Managed Payload scan failed";
     case OBSCURA64_PROTECTED_CORRUPT:
         return "invalid or corrupted protected payload";
+    case OBSCURA64_FILE_NOT_FOUND:
+        return "protected file not found";
     default:
         return "unknown status";
     }

@@ -9,6 +9,9 @@ set(OBSCURA64_DEFAULT_PROVIDER_SYMBOL "" CACHE STRING
     "Optional symbol naming the compile-time default obscura64_provider instance")
 
 add_library(obscura64 STATIC
+    src/obscura64_path.c
+    src/obscura64_file_io.c
+    src/obscura64_v2_file.c
     src/obscura64_v2_envelope.c
     src/obscura64_v2_dispatch.c
     src/obscura64_v2_casual.c
@@ -84,6 +87,22 @@ if(MSVC)
 endif()
 
 add_test(NAME obscura64_smoke COMMAND obscura64_test_smoke)
+
+add_executable(obscura64_test_v2_file tests/test_obscura64_v2_file.c)
+target_include_directories(obscura64_test_v2_file PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(obscura64_test_v2_file PRIVATE obscura64_test_support)
+if(MSVC)
+    target_compile_options(obscura64_test_v2_file PRIVATE /W4)
+endif()
+add_test(NAME obscura64_v2_file COMMAND obscura64_test_v2_file)
+
+add_executable(obscura64_test_v2_file_locking tests/test_obscura64_v2_file_locking.c)
+target_include_directories(obscura64_test_v2_file_locking PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(obscura64_test_v2_file_locking PRIVATE obscura64_test_support)
+if(MSVC)
+    target_compile_options(obscura64_test_v2_file_locking PRIVATE /W4)
+endif()
+add_test(NAME obscura64_v2_file_locking COMMAND obscura64_test_v2_file_locking)
 
 add_executable(obscura64_test_v2_envelope tests/test_obscura64_v2_envelope.c)
 target_link_libraries(obscura64_test_v2_envelope PRIVATE obscura64_test_support)
@@ -341,6 +360,20 @@ if(MSVC)
     target_compile_options(obscura64_test_failure PRIVATE /W4)
 endif()
 add_test(NAME obscura64_failure COMMAND obscura64_test_failure)
+
+add_executable(obscura64_test_v2_file_failure
+    tests/test_obscura64_v2_file_failure.c ${OBSCURA64_FAULT_TEST_SOURCES})
+target_compile_definitions(obscura64_test_v2_file_failure PRIVATE
+    OBSCURA64_TESTING OBSCURA64_REDUNDANCY_TESTING)
+target_include_directories(obscura64_test_v2_file_failure PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src)
+if(WIN32)
+    target_link_libraries(obscura64_test_v2_file_failure PRIVATE bcrypt crypt32 shell32 ole32 uuid)
+endif()
+if(MSVC)
+    target_compile_options(obscura64_test_v2_file_failure PRIVATE /W4)
+endif()
+add_test(NAME obscura64_v2_file_failure COMMAND obscura64_test_v2_file_failure)
 
 foreach(stage6_test redundancy recovery)
     add_executable(obscura64_test_${stage6_test}

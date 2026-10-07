@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.0.0-preview.3 — Reliable files
+
+- Added allocation-first protected-file write/read for NONE, CASUAL, and
+  CURRENT_USER, with optional primary/backup and V2/V1 format classification.
+- Added one adjacent validated backup, verified same-directory replacement,
+  read fallback, and shared/exclusive nonblocking file coordination.
+- Reused V1 persistence without changing frozen formats; extracted neutral
+  UTF-8 path conversion and added a variable-length replacement entry point.
+- No automatic read repair or V1 file upgrade; CLI tooling remains Preview 4.
+
 ## 2.0.0-preview.2 — Protection and legacy
 
 - Added self-contained Casual obfuscation with corruption validation and

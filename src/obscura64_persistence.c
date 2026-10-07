@@ -222,3 +222,13 @@ obscura64_status obscura64_persistence_replace_verified(
     }
     return status;
 }
+
+obscura64_status obscura64_persistence_replace_blob_verified(
+    const wchar_t *path, const unsigned char *data, size_t size,
+    obscura64_persistence_verify_fn verify, void *user_data, int *renamed)
+{
+    if (renamed != NULL) *renamed = 0;
+    if (renamed == NULL || !valid_arguments(path, data, size, verify))
+        return OBSCURA64_INVALID_ARGUMENT;
+    return replace_once(path, data, size, verify, user_data, renamed);
+}

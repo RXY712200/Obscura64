@@ -5,7 +5,7 @@
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-blue)
 ![Language: C11](https://img.shields.io/badge/language-C11-blue)
 
-**Obscura64 2.0.0-preview.2** — Windows C11 development source. The immutable
+**Obscura64 2.0.0-preview.3** — Windows C11 development source. The immutable
 [v1.0.0 release](https://github.com/RXY712200/Obscura64/releases/tag/v1.0.0)
 remains available for released V1 behavior.
 
@@ -18,6 +18,24 @@ inner Obscura64 record after decryption. Casual is not encryption; Obscura64
 does not invent cryptography.
 
 ## V2 Quick Start
+
+For one protected local file, pass a full UTF-8 Windows path whose parent exists:
+
+```c
+const char *path = "C:\\app-data\\settings.ob64";
+const unsigned char settings[] = {0, 1, 255};
+void *loaded = NULL;
+size_t loaded_len = 0;
+obscura64_status status = obscura64_write_file(path,
+    OBSCURA64_PROTECTION_CURRENT_USER, settings, sizeof(settings));
+if (status == OBSCURA64_OK)
+    status = obscura64_read_file_alloc(path, &loaded, &loaded_len);
+/* Use loaded only when status is OBSCURA64_OK. */
+obscura64_free(loaded);
+```
+
+See [Preview 3 reliable files](docs/V2_PREVIEW3.md) for backup, fallback,
+concurrency, and failure semantics.
 
 The allocation-first API needs no project directory, Profile, or V1 Provider:
 
@@ -67,6 +85,7 @@ recommended.
 ## Documentation
 
 - [V2 Preview 2 protection and legacy compatibility](docs/V2_PREVIEW2.md)
+- [V2 Preview 3 reliable files](docs/V2_PREVIEW3.md)
 - [V2 Preview 1 format, API, security boundary, and V1 compatibility](docs/V2_PREVIEW1.md)
 - [Documentation index](docs/README.md)
 - [V1 specification](docs/OBSCURA64_V1_SPEC.md)

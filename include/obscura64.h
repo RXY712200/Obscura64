@@ -8,7 +8,7 @@
 #define OBSCURA64_VERSION_MAJOR 2
 #define OBSCURA64_VERSION_MINOR 0
 #define OBSCURA64_VERSION_PATCH 0
-#define OBSCURA64_VERSION_PRERELEASE "preview.2"
+#define OBSCURA64_VERSION_PRERELEASE "preview.3"
 #define OBSCURA64_PROFILE_LIBRARY_VERSION 1
 #define OBSCURA64_PROFILE_SIZE 64
 #define OBSCURA64_PROVIDER_ABI_VERSION 1
@@ -40,7 +40,8 @@ typedef enum obscura64_status {
     OBSCURA64_UNRECOGNIZED_DATA,
     OBSCURA64_LEGACY_AMBIGUOUS,
     OBSCURA64_LEGACY_SCAN_FAILURE,
-    OBSCURA64_PROTECTED_CORRUPT
+    OBSCURA64_PROTECTED_CORRUPT,
+    OBSCURA64_FILE_NOT_FOUND
 } obscura64_status;
 
 typedef struct obscura64_context obscura64_context;
@@ -89,6 +90,22 @@ typedef enum obscura64_data_format {
 obscura64_status obscura64_unprotect_alloc_ex(
     const void *protected_data, size_t protected_len,
     void **output, size_t *output_len, obscura64_data_format *format);
+
+/* Full, NUL-terminated UTF-8 Windows target paths. These functions own one
+ * adjacent backup and coordination lock; no V1 project state is required.
+ * Successful allocations are released with obscura64_free. */
+typedef enum obscura64_file_source {
+    OBSCURA64_FILE_SOURCE_UNKNOWN = 0,
+    OBSCURA64_FILE_SOURCE_PRIMARY = 1,
+    OBSCURA64_FILE_SOURCE_BACKUP = 2
+} obscura64_file_source;
+obscura64_status obscura64_write_file(const char *path_utf8,
+    obscura64_protection protection, const void *input, size_t input_len);
+obscura64_status obscura64_read_file_alloc(const char *path_utf8,
+    void **output, size_t *output_len);
+obscura64_status obscura64_read_file_alloc_ex(const char *path_utf8,
+    void **output, size_t *output_len, obscura64_file_source *source,
+    obscura64_data_format *format);
 
 /* Only V1 builtin Managed Payload is supported. No project state is read or
  * modified. Custom V1 Providers still require the existing V1 context API. */

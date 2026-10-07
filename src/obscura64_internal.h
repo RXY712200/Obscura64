@@ -17,6 +17,9 @@ obscura64_status obscura64_redundancy_paths(const wchar_t *project,
 void obscura64_snapshot_paths_free(obscura64_snapshot_paths *paths);
 
 typedef struct obscura64_lock obscura64_lock;
+obscura64_status obscura64_path_from_utf8(const char *path_utf8, wchar_t **path_out);
+obscura64_status obscura64_file_read_all(const wchar_t *path,
+    unsigned char **output, size_t *length);
 obscura64_status obscura64_lock_acquire_shared(const wchar_t *path, obscura64_lock **lock);
 obscura64_status obscura64_lock_acquire_exclusive(const wchar_t *path, obscura64_lock **lock);
 /* Initial writer locks coordination byte 0 plus transient marker byte 1.
@@ -57,6 +60,10 @@ obscura64_status obscura64_persistence_replace_verified(
     const wchar_t *path, const unsigned char *data, size_t size,
     obscura64_persistence_verify_fn verify, void *user_data,
     const unsigned char *old_data);
+/* Variable-sized bytes: caller handles policy and any post-rename restore. */
+obscura64_status obscura64_persistence_replace_blob_verified(
+    const wchar_t *path, const unsigned char *data, size_t size,
+    obscura64_persistence_verify_fn verify, void *user_data, int *renamed);
 
 #define OBSCURA64_ALPHABET_SIZE OBSCURA64_PROFILE_SIZE
 #define OBSCURA64_REVERSE_INVALID UINT8_C(0xFF)

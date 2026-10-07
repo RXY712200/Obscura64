@@ -31,7 +31,7 @@ int main(void)
     void *allocated = (void *)1;
     size_t n = 999;
     CHECK("version", OBSCURA64_VERSION_MAJOR == 2 &&
-        strcmp(OBSCURA64_VERSION_PRERELEASE, "preview.2") == 0);
+        strcmp(OBSCURA64_VERSION_PRERELEASE, "preview.3") == 0);
     CHECK("semantic values", OBSCURA64_PROTECTION_NONE == 0 &&
         OBSCURA64_PROTECTION_CASUAL == 1 && OBSCURA64_PROTECTION_CURRENT_USER == 2);
     CHECK("operation-driven size query", obscura64_protect(OBSCURA64_PROTECTION_NONE,

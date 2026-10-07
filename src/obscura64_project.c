@@ -21,35 +21,6 @@ static int is_path_not_found_error(DWORD error)
     return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND;
 }
 
-static obscura64_status convert_path_utf8(const char *path_utf8, WCHAR **path_out)
-{
-    int required;
-    WCHAR *path;
-
-    if (path_utf8 == NULL || path_out == NULL || path_utf8[0] == '\0') {
-        return OBSCURA64_INVALID_ARGUMENT;
-    }
-    *path_out = NULL;
-    required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path_utf8, -1, NULL, 0);
-    if (required == 0) {
-        return OBSCURA64_INVALID_ARGUMENT;
-    }
-    if ((size_t)required > SIZE_MAX / sizeof(*path)) {
-        return OBSCURA64_SIZE_OVERFLOW;
-    }
-    path = (WCHAR *)malloc((size_t)required * sizeof(*path));
-    if (path == NULL) {
-        return OBSCURA64_OUT_OF_MEMORY;
-    }
-    if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path_utf8, -1,
-                            path, required) != required) {
-        free(path);
-        return OBSCURA64_INVALID_ARGUMENT;
-    }
-    *path_out = path;
-    return OBSCURA64_OK;
-}
-
 static WCHAR *append_component(const WCHAR *base, const WCHAR *component)
 {
     size_t base_len = wcslen(base);
@@ -192,7 +163,7 @@ obscura64_status obscura64_project_open_internal(
     obscura64_status status;
     if (out_context == NULL) return OBSCURA64_INVALID_ARGUMENT;
     *out_context = NULL;
-    status = convert_path_utf8(project_path_utf8, &project);
+    status = obscura64_path_from_utf8(project_path_utf8, &project);
     if (status != OBSCURA64_OK) return status;
     status = obscura64_context_create_from_profile_with_provider(
         obscura64_v1_character_pool, OBSCURA64_PROFILE_SIZE, provider, &context);
@@ -332,7 +303,7 @@ static obscura64_status force_reinitialize_internal(
 
     if (out_context == NULL) return OBSCURA64_INVALID_ARGUMENT;
     *out_context = NULL;
-    status = convert_path_utf8(project_path_utf8, &project);
+    status = obscura64_path_from_utf8(project_path_utf8, &project);
     if (status != OBSCURA64_OK) return status;
     status = obscura64_context_create_from_profile_with_provider(
         obscura64_v1_character_pool, OBSCURA64_PROFILE_SIZE, provider, &reserved_context);
