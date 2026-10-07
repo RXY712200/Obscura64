@@ -24,8 +24,8 @@ static DWORD WINAPI concurrent_open(void *arg)
 int main(void)
 {
     recovery_fixture f;
-    obscura64_project_state one,two,three,base,s,b,foreign;
-    obscura64_project_history h,h3,hbase,bh;
+    obscura64_project_state one,two,three,base={0},s,b,foreign;
+    obscura64_project_history h,h3,hbase={0},bh;
     obscura64_context *c=NULL;
     obscura64_lock *reader=NULL;
     unsigned char main_before[160],main_after[160],history_before[336],history_after[336];

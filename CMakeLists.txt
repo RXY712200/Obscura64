@@ -66,7 +66,10 @@ if(WIN32)
     target_link_libraries(obscura64 PUBLIC bcrypt crypt32 shell32 ole32 uuid)
 endif()
 
-if(MSVC)
+if(CMAKE_C_COMPILER_ID STREQUAL "Clang" AND CMAKE_C_SIMULATE_ID STREQUAL "MSVC")
+    # clang-cl /W4 maps to Clang -Wall -Wextra; /Wall maps to -Weverything.
+    target_compile_options(obscura64 PRIVATE /W4)
+elseif(MSVC)
     target_compile_options(obscura64 PRIVATE /W4)
 elseif(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(obscura64 PRIVATE -Wall -Wextra -Wpedantic)
@@ -553,13 +556,18 @@ install(FILES
     DESTINATION "${OBSCURA64_PACKAGE_DIR}")
 
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    if(CMAKE_C_SIMULATE_ID STREQUAL "MSVC")
+        set(OBSCURA64_WARNING_FLAGS /W4)
+    else()
+        set(OBSCURA64_WARNING_FLAGS -Wall -Wextra -Wpedantic)
+    endif()
     get_property(OBSCURA64_LOCAL_TARGETS DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
     foreach(local_target IN LISTS OBSCURA64_LOCAL_TARGETS)
         get_target_property(local_type ${local_target} TYPE)
         if((local_type STREQUAL "STATIC_LIBRARY" OR
             local_type STREQUAL "EXECUTABLE") AND
             NOT local_target STREQUAL "obscura64")
-            target_compile_options(${local_target} PRIVATE -Wall -Wextra -Wpedantic)
+            target_compile_options(${local_target} PRIVATE ${OBSCURA64_WARNING_FLAGS})
         endif()
     endforeach()
 endif()

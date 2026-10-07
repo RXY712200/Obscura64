@@ -26,9 +26,14 @@ obscura64_status obscura64_file_read_all(const wchar_t *path,
             OBSCURA64_FILE_NOT_FOUND : OBSCURA64_IO_ERROR;
     }
     if (GetFileType(file) != FILE_TYPE_DISK || !GetFileSizeEx(file, &size)) goto done;
-    if (size.QuadPart < 0 || (uint64_t)size.QuadPart > (uint64_t)SIZE_MAX) {
+    if (size.QuadPart < 0) {
         status = OBSCURA64_SIZE_OVERFLOW; goto done;
     }
+#if SIZE_MAX < UINT64_MAX
+    if ((uint64_t)size.QuadPart > (uint64_t)SIZE_MAX) {
+        status = OBSCURA64_SIZE_OVERFLOW; goto done;
+    }
+#endif
     count_size = (size_t)size.QuadPart;
     bytes = (unsigned char *)malloc(count_size == 0 ? 1 : count_size);
     if (bytes == NULL) { status = OBSCURA64_OUT_OF_MEMORY; goto done; }
