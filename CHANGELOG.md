@@ -2,6 +2,9 @@
 
 ## 2.0.0-preview.3 — Reliable files
 
+- Independent-review correction: separated nondestructive read fallback from
+  destructive write eligibility. Ordinary writes now preserve inaccessible
+  CurrentUser and ambiguous legacy bytes, including any existing backup.
 - Added allocation-first protected-file write/read for NONE, CASUAL, and
   CURRENT_USER, with optional primary/backup and V2/V1 format classification.
 - Added one adjacent validated backup, verified same-directory replacement,

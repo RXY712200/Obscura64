@@ -3,6 +3,7 @@
 #include "obscura64.h"
 #include "obscura64_internal.h"
 #include "obscura64_profiles_v1.h"
+#include "obscura64_v2_internal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -68,6 +69,28 @@ static int equals_read(const char *path, const void *expected, size_t length,
         (size == 0 || memcmp(plain, expected, size) == 0);
     obscura64_free(plain);
     return okay;
+}
+
+static int exact_file(const wchar_t *path, const void *expected, size_t length)
+{
+    unsigned char *actual = NULL;
+    size_t actual_len = 0;
+    int same = obscura64_file_read_all(path, &actual, &actual_len) ==
+        OBSCURA64_OK && actual_len == length &&
+        (length == 0 || memcmp(actual, expected, length) == 0);
+    free(actual);
+    return same;
+}
+
+static int no_owned_temps(const wchar_t *path)
+{
+    wchar_t pattern[MAX_PATH];
+    WIN32_FIND_DATAW data;
+    HANDLE find;
+    swprintf(pattern, MAX_PATH, L"%ls.tmp.*", path);
+    find = FindFirstFileW(pattern, &data);
+    if (find != INVALID_HANDLE_VALUE) { FindClose(find); return 0; }
+    return GetLastError() == ERROR_FILE_NOT_FOUND;
 }
 
 int main(void)
@@ -193,6 +216,57 @@ int main(void)
             first, sizeof(first)) == OBSCURA64_IO_ERROR);
         CHECK(obscura64_read_file_alloc(dir_utf8, &plain, &plain_len) ==
             OBSCURA64_IO_ERROR);
+    }
+    {
+        const unsigned char invalid_dpapi[] = {0x13, 0x57, 0x9b, 0xdf};
+        wchar_t blocked[MAX_PATH], blocked_backup[MAX_PATH], blocked_lock[MAX_PATH];
+        char blocked_utf8[MAX_PATH * 4];
+        unsigned char *saved_backup = NULL;
+        size_t saved_backup_len = 0, wire_len = 0;
+        void *wire = NULL;
+        obscura64_data_format format = OBSCURA64_FORMAT_UNKNOWN;
+        swprintf(blocked, MAX_PATH, L"%ls\\blocked-current-user", dir);
+        swprintf(blocked_backup, MAX_PATH, L"%ls.ob64.bak", blocked);
+        swprintf(blocked_lock, MAX_PATH, L"%ls.ob64.lock", blocked);
+        CHECK(utf8(blocked, blocked_utf8, sizeof(blocked_utf8)));
+        CHECK(obscura64_write_file(blocked_utf8, OBSCURA64_PROTECTION_CASUAL,
+            "safe", 4) == OBSCURA64_OK);
+        CHECK(obscura64_file_read_all(blocked_backup, &saved_backup,
+            &saved_backup_len) == OBSCURA64_OK);
+        CHECK(obscura64_v2_envelope_build(OBSCURA64_PROTECTION_CURRENT_USER,
+            invalid_dpapi, sizeof(invalid_dpapi), &wire, &wire_len) == OBSCURA64_OK);
+        CHECK(obscura64_unprotect_alloc(wire, wire_len, &plain, &plain_len) ==
+            OBSCURA64_PROTECTION_FAILURE && plain == NULL);
+        CHECK(put(blocked, wire, (DWORD)wire_len));
+        CHECK(obscura64_read_file_alloc_ex(blocked_utf8, &plain, &plain_len,
+            &source, &format) == OBSCURA64_OK &&
+            source == OBSCURA64_FILE_SOURCE_BACKUP &&
+            format == OBSCURA64_FORMAT_V2 && plain_len == 4 &&
+            memcmp(plain, "safe", 4) == 0);
+        obscura64_free(plain); plain = NULL;
+        CHECK(exact_file(blocked, wire, wire_len) &&
+            exact_file(blocked_backup, saved_backup, saved_backup_len));
+        CHECK(obscura64_write_file(blocked_utf8, OBSCURA64_PROTECTION_NONE,
+            "new", 3) == OBSCURA64_PROTECTION_FAILURE);
+        CHECK(exact_file(blocked, wire, wire_len) &&
+            exact_file(blocked_backup, saved_backup, saved_backup_len) &&
+            no_owned_temps(blocked) && no_owned_temps(blocked_backup));
+        CHECK(DeleteFileW(blocked_backup));
+        CHECK(obscura64_write_file(blocked_utf8, OBSCURA64_PROTECTION_NONE,
+            "new", 3) == OBSCURA64_PROTECTION_FAILURE);
+        CHECK(exact_file(blocked, wire, wire_len) &&
+            obscura64_file_read_all(blocked_backup, &current, &current_len) ==
+                OBSCURA64_FILE_NOT_FOUND);
+        CHECK(DeleteFileW(blocked));
+        CHECK(put(blocked_backup, wire, (DWORD)wire_len));
+        CHECK(obscura64_write_file(blocked_utf8, OBSCURA64_PROTECTION_NONE,
+            "new", 3) == OBSCURA64_PROTECTION_FAILURE);
+        CHECK(obscura64_file_read_all(blocked, &current, &current_len) ==
+            OBSCURA64_FILE_NOT_FOUND && exact_file(blocked_backup, wire, wire_len) &&
+            no_owned_temps(blocked) && no_owned_temps(blocked_backup));
+        CHECK(DeleteFileW(blocked_backup) && DeleteFileW(blocked_lock));
+        free(saved_backup);
+        obscura64_free(wire);
     }
     CHECK(obscura64_file_read_all(target, &current, &current_len) == OBSCURA64_OK);
     current[8] = 99; /* Clearly identified future V2 version. */

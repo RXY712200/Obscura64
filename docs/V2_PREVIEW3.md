@@ -34,18 +34,42 @@ Under one exclusive lock, the new application data is fully protected in
 memory. If the old primary fully unprotects, its **exact protected bytes** are
 written and verified as backup before replacing primary. After success,
 primary is new and backup is the prior valid primary. If primary is absent or
-invalid but backup validates, that backup is kept unchanged and only primary
-is replaced. If neither validates, the new protected bytes are first written
+has a replaceable data error while backup validates, that backup is kept
+unchanged and only primary is replaced. If neither validates and both are
+replaceable or absent, the new protected bytes are first written
 and verified as backup, then written as primary. Thus a first successful write
 already has one valid fallback. No corrupt primary bytes are promoted.
 
 A primary with an unsupported future V2 version or protection kind is not
 overwritten. Hard allocation, size, filesystem, or internal legacy-scan errors
-also stop the write. An unsupported backup needed for the decision is preserved.
+also stop the write. `PROTECTION_FAILURE` is not proof of corruption: a
+CurrentUser DPAPI blob may simply belong to another Windows protection
+context. `LEGACY_AMBIGUOUS` likewise does not establish disposable bytes.
+Either status on primary stops ordinary write before changing primary **or
+backup**, even when backup validates. If primary is missing or replaceable but
+backup returns either status, write preserves backup and fails. The same rule
+preserves an unsupported backup needed for the decision.
 Builtin V1 Managed Payload can be read; an explicit write over a valid legacy
 primary copies its exact V1 protected bytes into backup and writes a V2 primary.
 Custom V1 Provider payloads are not automatically supported. Read never
 upgrades legacy data; explicit upgrade is Preview 4 work.
+
+### Explicit file status policies
+
+| Status | Read may try backup? | Ordinary write may replace this copy? |
+| --- | --- | --- |
+| `FILE_NOT_FOUND` | Yes | Yes; there are no bytes to discard |
+| `ENVELOPE_CORRUPT`, `CASUAL_CORRUPT`, `PROTECTED_CORRUPT`, `UNRECOGNIZED_DATA` | Yes | Yes |
+| `PROTECTION_FAILURE`, `LEGACY_AMBIGUOUS` | Yes | **No**; valid data may be inaccessible or ambiguous |
+| `UNSUPPORTED_VERSION`, `UNSUPPORTED_PROTECTION` | No | No |
+| `INVALID_ARGUMENT`, `OUT_OF_MEMORY`, `SIZE_OVERFLOW`, `IO_ERROR`, `LEGACY_SCAN_FAILURE` | No | No |
+| All other or future statuses | No | No |
+
+The read and write policies are separate private pure functions with
+conservative defaults. Read fallback does not mutate either copy. Ordinary
+write cannot infer permission to discard bytes from an inability to decrypt
+them. Callers who intentionally discard inaccessible data must explicitly
+remove or rename it outside this API; Preview 3 has no force-overwrite entry.
 
 ## Replacement and failure semantics
 
@@ -98,6 +122,11 @@ validation before primary mutation. No collections, schemas, transactions,
 autosave, snapshots, cloud synchronization, CLI inspect/verify/upgrade, or
 automatic legacy migration are included. The latter CLI/upgrade workflows are
 deferred to Preview 4.
+
+Filesystem identity aliases (hard links, symlinks/reparse points, and 8.3 short
+names) can derive distinct sidecars from different path spellings. Callers
+should keep one stable target spelling. Alias-aware coordination is deferred
+to Preview 5 filesystem hardening; Preview 3 does not claim it.
 
 Microsoft references: [MoveFileExW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexw)
 and [ReplaceFileW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-replacefilew).

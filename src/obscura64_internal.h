@@ -20,6 +20,9 @@ typedef struct obscura64_lock obscura64_lock;
 obscura64_status obscura64_path_from_utf8(const char *path_utf8, wchar_t **path_out);
 obscura64_status obscura64_file_read_all(const wchar_t *path,
     unsigned char **output, size_t *length);
+/* Pure V2 file policy. Unknown/future statuses never authorize replacement. */
+int obscura64_file_read_fallback_eligible(obscura64_status status);
+int obscura64_file_write_replaceable_failure(obscura64_status status);
 obscura64_status obscura64_lock_acquire_shared(const wchar_t *path, obscura64_lock **lock);
 obscura64_status obscura64_lock_acquire_exclusive(const wchar_t *path, obscura64_lock **lock);
 /* Initial writer locks coordination byte 0 plus transient marker byte 1.

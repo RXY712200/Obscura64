@@ -165,9 +165,10 @@ static obscura64_status paths_make(const char *utf8, file_paths *paths)
     return OBSCURA64_OK;
 }
 
-static int data_invalid(obscura64_status status)
+int obscura64_file_read_fallback_eligible(obscura64_status status)
 {
     switch (status) {
+    case OBSCURA64_FILE_NOT_FOUND:
     case OBSCURA64_ENVELOPE_CORRUPT:
     case OBSCURA64_CASUAL_CORRUPT:
     case OBSCURA64_PROTECTED_CORRUPT:
@@ -176,6 +177,20 @@ static int data_invalid(obscura64_status status)
     case OBSCURA64_LEGACY_AMBIGUOUS:
         return 1;
     default: return 0;
+    }
+}
+
+int obscura64_file_write_replaceable_failure(obscura64_status status)
+{
+    switch (status) {
+    case OBSCURA64_FILE_NOT_FOUND:
+    case OBSCURA64_ENVELOPE_CORRUPT:
+    case OBSCURA64_CASUAL_CORRUPT:
+    case OBSCURA64_PROTECTED_CORRUPT:
+    case OBSCURA64_UNRECOGNIZED_DATA:
+        return 1;
+    default:
+        return 0;
     }
 }
 
@@ -252,13 +267,13 @@ obscura64_status obscura64_read_file_alloc_ex(const char *path_utf8,
     if (primary_status == OBSCURA64_OK) {
         found_source = OBSCURA64_FILE_SOURCE_PRIMARY;
         status = OBSCURA64_OK;
-    } else if (primary_status == OBSCURA64_FILE_NOT_FOUND || data_invalid(primary_status)) {
+    } else if (obscura64_file_read_fallback_eligible(primary_status)) {
         status = obscura64_file_read_all(paths.backup, &bytes, &length);
         if (status == OBSCURA64_OK)
             status = validate_bytes(bytes, length, &plain, &plain_len, &found_format);
         free(bytes);
         if (status == OBSCURA64_OK) found_source = OBSCURA64_FILE_SOURCE_BACKUP;
-        else if (status == OBSCURA64_FILE_NOT_FOUND || data_invalid(status)) {
+        else if (obscura64_file_read_fallback_eligible(status)) {
             if (primary_status != OBSCURA64_FILE_NOT_FOUND) status = primary_status;
         }
     } else status = primary_status;
@@ -306,14 +321,14 @@ obscura64_status obscura64_write_file(const char *path_utf8,
         recovery_bytes = primary.bytes;
         recovery_length = primary.length;
     } else {
-        if (primary.status != OBSCURA64_FILE_NOT_FOUND && !data_invalid(primary.status)) {
+        if (!obscura64_file_write_replaceable_failure(primary.status)) {
             status = primary.status; goto done_primary;
         }
         copy_load(paths.backup, &backup);
         if (backup.status == OBSCURA64_OK) {
             recovery_bytes = backup.bytes;
             recovery_length = backup.length;
-        } else if (backup.status == OBSCURA64_FILE_NOT_FOUND || data_invalid(backup.status)) {
+        } else if (obscura64_file_write_replaceable_failure(backup.status)) {
             status = obscura64_persistence_replace_blob_verified(paths.backup,
                 (const unsigned char *)new_bytes, new_length,
                 verify_protected, NULL, &renamed);

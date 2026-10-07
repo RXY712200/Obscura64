@@ -217,9 +217,14 @@ V1 development stages and release preparation are complete. Frozen Profile Libra
 - Stage 6: Redundancy / Recovery — complete.
 - Stage 7: Managed Payload / Disaster Recovery / V1 Preparation — complete.
 
-V2 protected-file helper APIs and streaming are not implemented. CurrentUser uses Windows DPAPI; Obscura64 does not implement a custom encryption algorithm. Optional examples can be built with `OBSCURA64_BUILD_EXAMPLES=ON`; this is not required for source integration.
+V2 Preview 3 protected-file write/read APIs are implemented in development
+source and remain under independent review. Their one-backup, validated
+fallback, and nonblocking file-lock behavior passed the manual GCC tests listed
+below. Streaming is not implemented. CurrentUser uses Windows DPAPI; Obscura64
+does not implement a custom encryption algorithm. Optional examples can be
+built with `OBSCURA64_BUILD_EXAMPLES=ON`; this is not required for source integration.
 
-See [current format](docs/PROJECT_STATE_V1.md), [history format](docs/PROJECT_HISTORY_V1.md), and the [release checklist](docs/RELEASE_CHECKLIST_V1.md). The v1.0.0 release was verified with MinGW GCC/G++ 10.2.0 on i686 Windows. Preview 2 passed manual GCC builds and formal tests on i686 (10.2.0) and x64 (16.2.0) Windows. MSVC, Clang, and CMake/CTest execution are not claimed.
+See [current format](docs/PROJECT_STATE_V1.md), [history format](docs/PROJECT_HISTORY_V1.md), and the [release checklist](docs/RELEASE_CHECKLIST_V1.md). The v1.0.0 release was verified with MinGW GCC/G++ 10.2.0 on i686 Windows. Preview 2 passed independent review. Preview 3 development source passed manual GCC builds, formal tests, and C/C++11 consumer checks on i686 (10.2.0) and x64 (16.2.0) Windows; independent review is still pending. MSVC, Clang, and CMake/CTest execution are not claimed.
 
 ## License
 
