@@ -16,10 +16,10 @@ v2.0.0 publication are separate later gates.
 - [x] GCC i686 strict C11 formal suite and direct C/C++ consumers pass.
 - [x] GCC x64 strict C11 formal suite and direct C/C++ consumers pass.
 - [x] MSVC x64 and Win32 CMake builds and complete CTest suites pass.
-- [ ] Clang x64 CMake build and complete CTest suite pass.
+- [x] Clang x64 CMake build and complete CTest suite pass.
 - [x] `BUILD_TESTING=OFF` builds only selected production targets.
 - [x] Installed package resolves via `find_package` for external C and C++11 consumers.
-- [ ] GitHub Actions Windows workflow completes successfully.
+- [x] GitHub Actions Windows workflow completes successfully.
 
 ## Hardening and release review
 
@@ -27,7 +27,7 @@ v2.0.0 publication are separate later gates.
 - [x] Practical sanitizer and static-analysis results are reviewed.
 - [x] V2 guide, README, SECURITY, CONTRIBUTING, and status strings are audited.
 - [x] No frozen artifact, V1/V2 wire format, or published tag changes.
-- [ ] Diff, secret/build-artifact scan, and `git diff --check` pass.
+- [x] Diff, secret/build-artifact scan, and `git diff --check` pass.
 - [ ] Independent V2 Preview 5 review passes before any Preview 5 tag.
 - [ ] Stable release validation and publication are performed separately.
 
@@ -47,4 +47,12 @@ v2.0.0 publication are separate later gates.
   were reviewed as analyzer false positives. No sanitizer finding remains.
 - Local 8.3 short-name and symlink creation were unavailable and explicitly
   skipped; hard-link rejection was exercised. No local Clang compiler was
-  found. The CI Clang job is the planned actual Clang validation.
+  found. GitHub Actions supplied clang-cl 19.1.5 on Windows Server 2022.
+- [GitHub Actions run 37631242883](https://github.com/RXY712200/Obscura64/actions/runs/37631242883)
+  passed on commit `9b6620ccd4380606d3c2466db0b2712741553b09`:
+  MSVC x64 34/34 plus installed consumers 2/2, MSVC Win32 34/34, and
+  clang-cl x64 34/34. Production Clang objects had no diagnostics. The Clang
+  full suite emitted 178 CRT deprecation warnings in legacy tests/tools
+  (`fopen`, `wcscpy` and similar); these are not suppressed and remain for
+  independent review. `clang-cl /W4` is used as Clang's documented equivalent
+  of `-Wall -Wextra`; `/Wall` would enable `-Weverything` on this driver.
