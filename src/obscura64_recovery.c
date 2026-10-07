@@ -65,7 +65,11 @@ static wchar_t *file_path(const wchar_t *dir, const wchar_t *file)
     wchar_t *p;
     if (a > SIZE_MAX / sizeof(*p) - b - 2U) return NULL;
     p = (wchar_t *)malloc((a+b+2U)*sizeof(*p));
-    if (p != NULL) { wcscpy(p, dir); wcscat(p, L"\\"); wcscat(p, file); }
+    if (p != NULL) {
+        memcpy(p, dir, a * sizeof(*p));
+        p[a] = L'\\';
+        memcpy(p + a + 1U, file, (b + 1U) * sizeof(*p));
+    }
     return p;
 }
 static int usable_error(obscura64_status s)
@@ -113,8 +117,8 @@ obscura64_status obscura64_recovery_ensure(const wchar_t *project, const wchar_t
 {
     wchar_t *cp = file_path(directory,L"current.state"), *hp = file_path(directory,L"history.state");
     obscura64_snapshot_paths paths = {0};
-    obscura64_project_state main, backup, candidate;
-    obscura64_project_history local, mirror, chosen;
+    obscura64_project_state main = {0}, backup = {0}, candidate = {0};
+    obscura64_project_history local = {0}, mirror = {0}, chosen = {0};
     obscura64_status cs, hs, bs = OBSCURA64_STATE_MISSING, bh = OBSCURA64_STATE_MISSING, status;
     int write_history = 0, has_chosen = 0;
     if (cp == NULL || hp == NULL) { status = OBSCURA64_OUT_OF_MEMORY; goto done; }

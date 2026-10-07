@@ -6,6 +6,8 @@ V2 CurrentUser delegates protection to Windows DPAPI.
 
 ## Start here
 
+- [Current V2 guide](V2_GUIDE.md)
+- [V2 release candidate checklist](RELEASE_CHECKLIST_V2.md)
 - [V2 Preview 4 upgrade and maintenance tooling](V2_PREVIEW4.md)
 
 - [V2 Preview 2 protection and legacy compatibility](V2_PREVIEW2.md)

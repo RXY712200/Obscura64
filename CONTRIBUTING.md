@@ -31,11 +31,18 @@ architecture, commands, results, and any untested areas. The verified v1.0.0
 environment is MinGW GCC/G++ 10.2.0, i686-w64-mingw32, C11, with
 `-Wall -Wextra -Wpedantic`; keep those builds warning-clean.
 
-CMake received static review only in that environment. Preview 2 also passed
-manual GCC/G++ builds and formal tests on x64 Windows. Real clean Windows
-configure/build/CTest execution, MSVC, and Clang remain validation work.
-Do not present them as tested until evidence is available. CMake is a
-development tool, not a runtime dependency; direct source integration remains supported.
+For V2, use a clean Windows CMake build and CTest on MSVC x64/Win32 and
+Clang x64 when available, plus strict C11 `-Wall -Wextra -Wpedantic` manual
+regression on MinGW GCC i686/x64. Run installed C and C++11 consumers from
+`tests/package_consumer` against a temporary install prefix. Use
+`BUILD_TESTING=OFF` to check production-only integration; tools and examples
+are configurable. Record any unavailable toolchain or skipped OS feature
+honestly. CMake is a build tool, not a runtime dependency; direct source
+integration remains supported.
+
+Preserve the V2 envelope, Casual body, and CurrentUser inner-record layouts
+and deterministic fixtures. Published stable and approved Preview tags are
+immutable. Compatibility changes need a versioned design and explicit review.
 
 ## Pull requests
 

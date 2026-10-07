@@ -5,11 +5,14 @@
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-blue)
 ![Language: C11](https://img.shields.io/badge/language-C11-blue)
 
-**Obscura64 2.0.0-preview.4** — Windows C11 development source. The immutable
+**Obscura64 2.0.0-preview.5** — Windows C11 development source. The immutable
 [v1.0.0 release](https://github.com/RXY712200/Obscura64/releases/tag/v1.0.0)
 remains available for released V1 behavior.
 
-Obscura64 is a Windows C11 library for software-internal local data. Its Casual mode raises the effort needed for casual inspection and manual editing: fields such as `coins=1000`, `level=20`, and `unlock=0` become encoded bytes that are less immediately readable.
+Obscura64 is a Windows C11 library for the lifecycle of protected local
+application blobs. Its V2 byte and file APIs take an explicit protection
+choice and return a versioned representation. V1 project/Profile APIs remain
+available for compatibility.
 
 Choose a protection semantic explicitly: `NONE` leaves bytes plain, `CASUAL`
 provides reversible obfuscation with corruption checks, and `CURRENT_USER`
@@ -34,8 +37,8 @@ if (status == OBSCURA64_OK)
 obscura64_free(loaded);
 ```
 
-See [Preview 3 reliable files](docs/V2_PREVIEW3.md) for backup, fallback,
-concurrency, and failure semantics.
+See the [current V2 guide](docs/V2_GUIDE.md) for backup, fallback,
+concurrency, installation, and security limits.
 
 For explicit maintenance, build `obscura64_cli` (`obscura64.exe`):
 
@@ -45,7 +48,7 @@ obscura64 verify settings.ob64
 obscura64 upgrade settings.ob64 --to current-user
 ```
 
-The target semantic is always explicit. See [Preview 4 upgrade and tooling](docs/V2_PREVIEW4.md).
+The target semantic is always explicit. See the [V2 guide](docs/V2_GUIDE.md).
 
 The allocation-first API needs no project directory, Profile, or V1 Provider:
 
@@ -94,6 +97,8 @@ recommended.
 
 ## Documentation
 
+- [Current V2 guide](docs/V2_GUIDE.md)
+- [V2 release candidate checklist](docs/RELEASE_CHECKLIST_V2.md)
 - [V2 Preview 4 upgrade and maintenance tooling](docs/V2_PREVIEW4.md)
 
 - [V2 Preview 2 protection and legacy compatibility](docs/V2_PREVIEW2.md)
@@ -198,7 +203,11 @@ cd build
 ctest -C Debug --output-on-failure
 ```
 
-CMake/CTest has not yet been executed in the current development environment because CMake is unavailable there. The code has been manually built and tested with MinGW GCC 10.2.0 using C11 and `-Wall -Wextra -Wpedantic`, with zero compiler warnings and errors in that regression. This is not a zero-warning guarantee for every compiler.
+CMake builds and CTest are supported on Windows. Set `BUILD_TESTING=OFF` for
+downstream builds without formal tests. `OBSCURA64_BUILD_TOOLS=OFF` omits the
+CLI tools; examples remain opt-in. Installation exports
+`Obscura64::obscura64` for `find_package(Obscura64 CONFIG REQUIRED)`. See the
+[V2 guide](docs/V2_GUIDE.md) for direct-source and installed-package use.
 
 Advanced integrations may select a compile-time default Provider with the `OBSCURA64_DEFAULT_PROVIDER_SYMBOL` CMake setting and provide the named `obscura64_provider` instance in their linked sources.
 
@@ -229,14 +238,15 @@ V1 development stages and release preparation are complete. Frozen Profile Libra
 - Stage 6: Redundancy / Recovery — complete.
 - Stage 7: Managed Payload / Disaster Recovery / V1 Preparation — complete.
 
-V2 Previews 1, 2, and 3 passed independent review. Preview 4 upgrade and
-maintenance tooling is implemented in development source and is pending
-independent PASS. Preview 5 has not started. Streaming is not implemented.
+V2 Previews 1–4 passed independent review. Preview 5 hardening and closure is
+the current development source and awaits independent review. Streaming is not implemented.
 CurrentUser uses Windows DPAPI; Obscura64 does not implement a custom
 encryption algorithm. Optional examples can be built with
 `OBSCURA64_BUILD_EXAMPLES=ON`; this is not required for source integration.
 
-See [current format](docs/PROJECT_STATE_V1.md), [history format](docs/PROJECT_HISTORY_V1.md), and the [release checklist](docs/RELEASE_CHECKLIST_V1.md). The v1.0.0 release was verified with MinGW GCC/G++ 10.2.0 on i686 Windows. Preview 4 development source passed manual GCC builds, formal tests, and C/C++11 consumer checks on i686 (10.2.0) and x64 (16.2.0) Windows; its independent review remains pending. MSVC, Clang, and CMake/CTest execution are not claimed.
+See the [V2 release candidate checklist](docs/RELEASE_CHECKLIST_V2.md) for
+actual current validation and remaining gates. The stable v1.0.0 release and
+its [V1 checklist](docs/RELEASE_CHECKLIST_V1.md) remain historical records.
 
 ## License
 

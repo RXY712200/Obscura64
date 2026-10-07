@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.0.0-preview.5 — Hardening and V2 closure
+
+- Added bounded Windows path alias handling: canonical existing parents and
+  targets share sidecars, while target reparse points and multi-hard-link
+  targets are rejected before mutation.
+- Added real Windows CMake/CTest support, a static installed package with
+  `Obscura64::obscura64`, external C/C++ package consumers, and Windows CI.
+- Added deterministic parser mutation coverage and a consolidated V2 guide.
+- Preserved V1 artifacts, V2 wire layouts, and existing public API.
+
 ## 2.0.0-preview.4 — Upgrade and tooling
 
 - Added explicit, single-lock protected-file upgrade to selected V2 semantics,

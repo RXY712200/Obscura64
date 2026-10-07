@@ -12,7 +12,12 @@ static wchar_t *join(const wchar_t *base, const wchar_t *name)
     wchar_t *p;
     if (a > SIZE_MAX / sizeof(*p) - b - 2U) return NULL;
     p = (wchar_t *)malloc((a + b + 2U) * sizeof(*p));
-    if (p != NULL) { wcscpy(p, base); if (a && p[a-1] != L'\\') wcscat(p, L"\\"); wcscat(p, name); }
+    if (p != NULL) {
+        size_t position = a;
+        memcpy(p, base, a * sizeof(*p));
+        if (a && p[a - 1U] != L'\\') p[position++] = L'\\';
+        memcpy(p + position, name, (b + 1U) * sizeof(*p));
+    }
     return p;
 }
 

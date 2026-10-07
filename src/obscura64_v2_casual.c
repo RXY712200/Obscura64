@@ -21,7 +21,7 @@ obscura64_status obscura64_v2_casual_protect_with_profile(uint16_t profile_id,
     const void *input, size_t length, void **body, size_t *body_len)
 {
     unsigned char *result;
-    size_t encoded_len, written;
+    size_t encoded_len, written = 0;
     obscura64_status status;
     if (body != NULL) *body = NULL;
     if (body_len != NULL) *body_len = 0;

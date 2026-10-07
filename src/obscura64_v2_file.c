@@ -55,12 +55,22 @@ static int reserved_name(const wchar_t *path)
 
 static int absolute_path(const wchar_t *p)
 {
-    if (p[0] == L'\\' && p[1] == L'\\' && p[2] == L'.' &&
-        p[3] == L'\\') return 0; /* Win32 device namespace. */
+    size_t length = wcslen(p);
+    if (length < 3) return 0;
+    if (length >= 4 && wcsncmp(p, L"\\\\.\\", 4) == 0)
+        return 0; /* Win32 device namespace. */
+    if (length >= 4 && wcsncmp(p, L"\\\\?\\", 4) == 0) {
+        /* Permit only extended DOS and UNC paths, never GLOBALROOT/devices. */
+        if (length >= 7 &&
+            (((p[4] >= L'A' && p[4] <= L'Z') ||
+              (p[4] >= L'a' && p[4] <= L'z')) && p[5] == L':' &&
+             p[6] == L'\\')) return 1;
+        return length > 8 && wcsncmp(p + 4, L"UNC\\", 4) == 0;
+    }
     return (((p[0] >= L'A' && p[0] <= L'Z') ||
             (p[0] >= L'a' && p[0] <= L'z')) && p[1] == L':' &&
             (p[2] == L'\\' || p[2] == L'/')) ||
-           (p[0] == L'\\' && p[1] == L'\\' && p[2] != L'\0');
+           (p[0] == L'\\' && p[1] == L'\\');
 }
 
 static int dos_device_name(const wchar_t *part, size_t length)
@@ -98,7 +108,8 @@ static int ambiguous_components(const wchar_t *path)
         if (*p == L'\\' || *p == L'/' || *p == L'\0') {
             size_t len = (size_t)(p - start);
             if (len != 0 && (start[len - 1] == L' ' ||
-                start[len - 1] == L'.')) return 1;
+                (start[len - 1] == L'.' &&
+                 !(len == 1 || (len == 2 && start[0] == L'.'))))) return 1;
             if (len != 0 && dos_device_name(start, len)) return 1;
             if (*p == L'\0') break;
             start = p + 1;
@@ -123,6 +134,106 @@ static wchar_t *add_suffix(const wchar_t *base, const wchar_t *suffix)
 static void paths_free(file_paths *p)
 {
     free(p->target); free(p->backup); free(p->lock);
+}
+
+/* Resolve directory aliases before deriving sidecars. Existing targets are
+ * resolved by handle, which also expands short names. Multi-link targets and
+ * target reparse points have no unambiguous path-based replacement identity. */
+static obscura64_status final_handle_path(HANDLE handle, wchar_t **result)
+{
+    DWORD needed = GetFinalPathNameByHandleW(handle, NULL, 0,
+        FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+    DWORD written;
+    wchar_t *path;
+    if (needed == 0) return OBSCURA64_IO_ERROR;
+    if (needed == MAXDWORD) return OBSCURA64_SIZE_OVERFLOW;
+#if SIZE_MAX <= UINT32_MAX
+    if (needed > SIZE_MAX / sizeof(wchar_t) - 1U)
+        return OBSCURA64_SIZE_OVERFLOW;
+#endif
+    path = (wchar_t *)malloc(((size_t)needed + 1U) * sizeof(wchar_t));
+    if (path == NULL) return OBSCURA64_OUT_OF_MEMORY;
+    written = GetFinalPathNameByHandleW(handle, path, needed + 1U,
+        FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+    if (written == 0 || written > needed) {
+        free(path); return OBSCURA64_IO_ERROR;
+    }
+    *result = path;
+    return OBSCURA64_OK;
+}
+
+static obscura64_status canonical_target(const wchar_t *lexical,
+    wchar_t **result)
+{
+    const wchar_t *slash = wcsrchr(lexical, L'\\');
+    const wchar_t *forward = wcsrchr(lexical, L'/');
+    wchar_t *parent = NULL, *canonical = NULL, *joined = NULL;
+    HANDLE handle;
+    BY_HANDLE_FILE_INFORMATION info;
+    obscura64_status status;
+    size_t parent_len;
+    DWORD attributes;
+    if (forward != NULL && (slash == NULL || forward > slash)) slash = forward;
+    if (slash == NULL || slash[1] == L'\0') return OBSCURA64_INVALID_ARGUMENT;
+    parent_len = (size_t)(slash - lexical);
+    if (parent_len == 2 && lexical[1] == L':') ++parent_len;
+    parent = (wchar_t *)malloc((parent_len + 1U) * sizeof(wchar_t));
+    if (parent == NULL) return OBSCURA64_OUT_OF_MEMORY;
+    memcpy(parent, lexical, parent_len * sizeof(wchar_t));
+    parent[parent_len] = L'\0';
+    handle = CreateFileW(parent, FILE_READ_ATTRIBUTES,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+        OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    free(parent);
+    if (handle == INVALID_HANDLE_VALUE) {
+        DWORD error = GetLastError();
+        if (error == ERROR_PATH_NOT_FOUND || error == ERROR_FILE_NOT_FOUND) {
+            *result = add_suffix(lexical, L"");
+            return *result == NULL ? OBSCURA64_OUT_OF_MEMORY : OBSCURA64_OK;
+        }
+        return OBSCURA64_IO_ERROR;
+    }
+    status = final_handle_path(handle, &canonical);
+    CloseHandle(handle);
+    if (status != OBSCURA64_OK) return status;
+    joined = add_suffix(canonical,
+        canonical[wcslen(canonical) - 1U] == L'\\' ? slash + 1 : L"\\");
+    if (joined == NULL) { free(canonical); return OBSCURA64_OUT_OF_MEMORY; }
+    if (canonical[wcslen(canonical) - 1U] != L'\\') {
+        wchar_t *with_name = add_suffix(joined, slash + 1);
+        free(joined); joined = with_name;
+        if (joined == NULL) { free(canonical); return OBSCURA64_OUT_OF_MEMORY; }
+    }
+    free(canonical);
+    attributes = GetFileAttributesW(joined);
+    if (attributes == INVALID_FILE_ATTRIBUTES) {
+        DWORD error = GetLastError();
+        if (error != ERROR_FILE_NOT_FOUND && error != ERROR_PATH_NOT_FOUND) {
+            free(joined); return OBSCURA64_IO_ERROR;
+        }
+        *result = joined; return OBSCURA64_OK;
+    }
+    if ((attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+        free(joined); return OBSCURA64_INVALID_ARGUMENT;
+    }
+    handle = CreateFileW(joined, FILE_READ_ATTRIBUTES,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+        OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+        NULL);
+    if (handle == INVALID_HANDLE_VALUE) {
+        free(joined); return OBSCURA64_IO_ERROR;
+    }
+    if (!GetFileInformationByHandle(handle, &info)) {
+        CloseHandle(handle); free(joined); return OBSCURA64_IO_ERROR;
+    }
+    if (info.nNumberOfLinks > 1 ||
+        (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+        CloseHandle(handle); free(joined); return OBSCURA64_INVALID_ARGUMENT;
+    }
+    status = final_handle_path(handle, result);
+    CloseHandle(handle);
+    free(joined);
+    return status;
 }
 
 static obscura64_status paths_make(const char *utf8, file_paths *paths)
@@ -152,6 +263,15 @@ static obscura64_status paths_make(const char *utf8, file_paths *paths)
     if (written == 0 || written >= needed) {
         free(normalized); paths_free(paths); return OBSCURA64_IO_ERROR;
     }
+    }
+    free(paths->target);
+    paths->target = normalized;
+    if (reserved_name(paths->target)) {
+        paths_free(paths); return OBSCURA64_INVALID_ARGUMENT;
+    }
+    status = canonical_target(paths->target, &normalized);
+    if (status != OBSCURA64_OK) {
+        paths_free(paths); return status;
     }
     free(paths->target);
     paths->target = normalized;
@@ -299,7 +419,7 @@ obscura64_status obscura64_write_file(const char *path_utf8,
 {
     file_paths paths;
     obscura64_lock *lock;
-    file_copy primary, backup;
+    file_copy primary = {0}, backup = {0};
     void *new_bytes = NULL;
     size_t new_length = 0;
     const unsigned char *recovery_bytes;

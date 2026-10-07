@@ -65,6 +65,11 @@ obscura64_status obscura64_v2_envelope_parse(const void *data, size_t length,
 {
     const unsigned char *p = (const unsigned char *)data;
     uint64_t encoded_length;
+    if (kind != NULL) *kind = 0;
+    if (body != NULL) *body = NULL;
+    if (body_len != NULL) *body_len = 0;
+    if (kind == NULL || body == NULL || body_len == NULL)
+        return OBSCURA64_INVALID_ARGUMENT;
     if (data == NULL && length != 0) return OBSCURA64_INVALID_ARGUMENT;
     if (length < OBSCURA64_V2_HEADER_SIZE) return OBSCURA64_ENVELOPE_CORRUPT;
     if (memcmp(p, v2_magic, sizeof(v2_magic)) != 0)

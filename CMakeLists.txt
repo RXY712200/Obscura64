@@ -1,6 +1,17 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(Obscura64 LANGUAGES C)
+project(Obscura64 VERSION 2.0.0 LANGUAGES C)
+
+if(NOT WIN32)
+    message(FATAL_ERROR "Obscura64 supports Windows only")
+endif()
+
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+include(CTest)
+set(OBSCURA64_VERSION_PRERELEASE "preview.5")
+option(OBSCURA64_BUILD_TOOLS "Build command-line tools" ON)
+option(OBSCURA64_INSTALL_TOOLS "Install command-line tools" OFF)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -37,10 +48,12 @@ add_library(obscura64 STATIC
     src/obscura64_managed_payload.c
     src/obscura64_disaster.c
 )
+add_library(Obscura64::obscura64 ALIAS obscura64)
 
 target_include_directories(obscura64
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
 if(NOT OBSCURA64_DEFAULT_PROVIDER_SYMBOL STREQUAL "")
@@ -55,9 +68,31 @@ endif()
 
 if(MSVC)
     target_compile_options(obscura64 PRIVATE /W4)
+elseif(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(obscura64 PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-enable_testing()
+if(OBSCURA64_BUILD_TOOLS)
+    add_executable(obscura64_cli tools/obscura64.c)
+    target_include_directories(obscura64_cli PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(obscura64_cli PRIVATE obscura64)
+    set_target_properties(obscura64_cli PROPERTIES OUTPUT_NAME obscura64)
+    if(MINGW)
+        target_link_options(obscura64_cli PRIVATE -municode)
+    endif()
+    add_executable(obscura64_recover tools/obscura64_recover.c)
+    target_include_directories(obscura64_recover PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(obscura64_recover PRIVATE obscura64)
+    if(MINGW)
+        target_link_options(obscura64_recover PRIVATE -municode)
+    endif()
+    if(MSVC)
+        target_compile_options(obscura64_cli PRIVATE /W4)
+        target_compile_options(obscura64_recover PRIVATE /W4)
+    endif()
+endif()
+
+if(BUILD_TESTING)
 
 # Tests never access the developer's real LocalAppData. Without an explicit
 # temporary test root the instrumented mirror is unavailable, not production.
@@ -96,6 +131,21 @@ if(MSVC)
 endif()
 add_test(NAME obscura64_v2_file COMMAND obscura64_test_v2_file)
 
+add_executable(obscura64_test_v2_path tests/test_obscura64_v2_path.c)
+target_link_libraries(obscura64_test_v2_path PRIVATE obscura64_test_support)
+if(MSVC)
+    target_compile_options(obscura64_test_v2_path PRIVATE /W4)
+endif()
+add_test(NAME obscura64_v2_path COMMAND obscura64_test_v2_path)
+
+add_executable(obscura64_test_v2_mutation tests/test_obscura64_v2_mutation.c)
+target_include_directories(obscura64_test_v2_mutation PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(obscura64_test_v2_mutation PRIVATE obscura64_test_support)
+if(MSVC)
+    target_compile_options(obscura64_test_v2_mutation PRIVATE /W4)
+endif()
+add_test(NAME obscura64_v2_mutation COMMAND obscura64_test_v2_mutation)
+
 add_executable(obscura64_test_v2_upgrade tests/test_obscura64_v2_upgrade.c)
 target_include_directories(obscura64_test_v2_upgrade PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(obscura64_test_v2_upgrade PRIVATE obscura64_test_support)
@@ -104,24 +154,15 @@ if(MSVC)
 endif()
 add_test(NAME obscura64_v2_upgrade COMMAND obscura64_test_v2_upgrade)
 
-add_executable(obscura64_cli tools/obscura64.c)
-target_include_directories(obscura64_cli PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(obscura64_cli PRIVATE obscura64)
-set_target_properties(obscura64_cli PROPERTIES OUTPUT_NAME obscura64)
-if(MINGW)
-    target_link_options(obscura64_cli PRIVATE -municode)
-endif()
-if(MSVC)
-    target_compile_options(obscura64_cli PRIVATE /W4)
-endif()
-
 add_executable(obscura64_test_v2_cli tests/test_obscura64_v2_cli.c)
 target_include_directories(obscura64_test_v2_cli PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(obscura64_test_v2_cli PRIVATE obscura64_test_support)
 if(MSVC)
     target_compile_options(obscura64_test_v2_cli PRIVATE /W4)
 endif()
-add_test(NAME obscura64_v2_cli COMMAND obscura64_test_v2_cli $<TARGET_FILE:obscura64_cli>)
+if(OBSCURA64_BUILD_TOOLS)
+    add_test(NAME obscura64_v2_cli COMMAND obscura64_test_v2_cli $<TARGET_FILE:obscura64_cli>)
+endif()
 
 add_executable(obscura64_test_v2_file_policy tests/test_obscura64_v2_file_policy.c)
 target_include_directories(obscura64_test_v2_file_policy PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -445,13 +486,6 @@ foreach(stage6_test redundancy recovery)
     add_test(NAME obscura64_${stage6_test} COMMAND obscura64_test_${stage6_test})
 endforeach()
 
-add_executable(obscura64_recover tools/obscura64_recover.c)
-target_include_directories(obscura64_recover PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(obscura64_recover PRIVATE obscura64)
-if(MINGW)
-    target_link_options(obscura64_recover PRIVATE -municode)
-endif()
-
 foreach(stage7_test managed_payload recover_tool)
     add_executable(obscura64_test_${stage7_test} tests/test_obscura64_${stage7_test}.c)
     target_include_directories(obscura64_test_${stage7_test} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -461,7 +495,9 @@ foreach(stage7_test managed_payload recover_tool)
     endif()
 endforeach()
 add_test(NAME obscura64_managed_payload COMMAND obscura64_test_managed_payload)
-add_test(NAME obscura64_recover_tool COMMAND obscura64_test_recover_tool $<TARGET_FILE:obscura64_recover>)
+if(OBSCURA64_BUILD_TOOLS)
+    add_test(NAME obscura64_recover_tool COMMAND obscura64_test_recover_tool $<TARGET_FILE:obscura64_recover>)
+endif()
 
 add_executable(obscura64_test_disaster tests/test_obscura64_disaster.c ${OBSCURA64_TEST_SOURCES})
 target_include_directories(obscura64_test_disaster PRIVATE
@@ -479,11 +515,10 @@ foreach(target obscura64_test_disaster obscura64_test_managed_default)
         target_compile_options(${target} PRIVATE /W4)
     endif()
 endforeach()
-if(MSVC)
-    target_compile_options(obscura64_recover PRIVATE /W4)
-endif()
 add_test(NAME obscura64_disaster COMMAND obscura64_test_disaster)
 add_test(NAME obscura64_managed_default COMMAND obscura64_test_managed_default)
+
+endif() # BUILD_TESTING
 
 option(OBSCURA64_BUILD_EXAMPLES "Build public API examples" OFF)
 if(OBSCURA64_BUILD_EXAMPLES)
@@ -492,6 +527,39 @@ if(OBSCURA64_BUILD_EXAMPLES)
         target_link_libraries(obscura64_${example} PRIVATE obscura64)
         if(MSVC)
             target_compile_options(obscura64_${example} PRIVATE /W4)
+        endif()
+    endforeach()
+endif()
+
+install(TARGETS obscura64 EXPORT Obscura64Targets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(FILES include/obscura64.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+if(OBSCURA64_BUILD_TOOLS AND OBSCURA64_INSTALL_TOOLS)
+    install(TARGETS obscura64_cli obscura64_recover
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+set(OBSCURA64_PACKAGE_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/Obscura64")
+configure_package_config_file(cmake/Obscura64Config.cmake.in
+    "${CMAKE_CURRENT_BINARY_DIR}/Obscura64Config.cmake"
+    INSTALL_DESTINATION "${OBSCURA64_PACKAGE_DIR}")
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/Obscura64ConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION} COMPATIBILITY SameMajorVersion)
+install(EXPORT Obscura64Targets NAMESPACE Obscura64::
+    DESTINATION "${OBSCURA64_PACKAGE_DIR}")
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/Obscura64Config.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/Obscura64ConfigVersion.cmake"
+    DESTINATION "${OBSCURA64_PACKAGE_DIR}")
+
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    get_property(OBSCURA64_LOCAL_TARGETS DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(local_target IN LISTS OBSCURA64_LOCAL_TARGETS)
+        get_target_property(local_type ${local_target} TYPE)
+        if((local_type STREQUAL "STATIC_LIBRARY" OR
+            local_type STREQUAL "EXECUTABLE") AND
+            NOT local_target STREQUAL "obscura64")
+            target_compile_options(${local_target} PRIVATE -Wall -Wextra -Wpedantic)
         endif()
     endforeach()
 endif()

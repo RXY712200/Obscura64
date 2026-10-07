@@ -1,5 +1,6 @@
 #include "obscura64_internal.h"
 #include <stdio.h>
+#include <string.h>
 
 typedef struct policy_case {
     obscura64_status status;
@@ -45,6 +46,12 @@ int main(void)
             return 1;
         }
         ++checks;
+        if (obscura64_status_string(cases[i].status) == NULL ||
+            strcmp(obscura64_status_string(cases[i].status), "unknown status") == 0) {
+            fprintf(stderr, "status string missing for %d\n", (int)cases[i].status);
+            return 1;
+        }
+        ++checks;
         if (obscura64_file_write_replaceable_failure(cases[i].status) !=
             cases[i].write_replaceable) {
             fprintf(stderr, "write policy failed for status %d\n", (int)cases[i].status);
@@ -58,6 +65,9 @@ int main(void)
         return 1;
     }
     checks += 2;
+    if (strcmp(obscura64_status_string((obscura64_status)9999),
+        "unknown status") != 0) return 1;
+    ++checks;
     printf("V2 file policy checks: %u\n", checks);
     return 0;
 }

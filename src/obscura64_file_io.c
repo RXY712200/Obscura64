@@ -10,7 +10,7 @@ obscura64_status obscura64_file_read_all(const wchar_t *path,
     HANDLE file;
     LARGE_INTEGER size;
     unsigned char *bytes = NULL, extra;
-    size_t position = 0, count_size;
+    size_t position = 0, count_size = 0;
     DWORD count;
     obscura64_status status = OBSCURA64_IO_ERROR;
     if (output != NULL) *output = NULL;

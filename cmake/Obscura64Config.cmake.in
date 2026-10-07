@@ -1,0 +1,5 @@
+@PACKAGE_INIT@
+
+set(Obscura64_VERSION_FULL "@PROJECT_VERSION@-@OBSCURA64_VERSION_PRERELEASE@")
+include("${CMAKE_CURRENT_LIST_DIR}/Obscura64Targets.cmake")
+check_required_components(Obscura64)
