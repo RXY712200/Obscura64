@@ -3,6 +3,42 @@
 #include <stdlib.h>
 #include <string.h>
 
+obscura64_status obscura64_inspect_bytes(const void *data, size_t length,
+    obscura64_inspection *inspection)
+{
+    const unsigned char *bytes = (const unsigned char *)data;
+    const unsigned char *body;
+    size_t body_len;
+    uint16_t kind;
+    void *plain = NULL;
+    size_t plain_len = 0;
+    obscura64_status status;
+    if (inspection == NULL || (data == NULL && length != 0))
+        return OBSCURA64_INVALID_ARGUMENT;
+    memset(inspection, 0, sizeof(*inspection));
+    inspection->format = OBSCURA64_FORMAT_UNKNOWN;
+    if (!obscura64_v2_has_magic(data, length)) {
+        status = obscura64_v2_legacy_read(data, length, &plain, &plain_len);
+        obscura64_free(plain);
+        if (status == OBSCURA64_OK)
+            inspection->format = OBSCURA64_FORMAT_V1_LEGACY_UPGRADE_RECOMMENDED;
+    } else {
+        inspection->format = OBSCURA64_FORMAT_V2;
+        if (length >= 10)
+            inspection->version = (unsigned int)bytes[8] | ((unsigned int)bytes[9] << 8);
+        status = obscura64_v2_envelope_parse(data, length, &kind, &body, &body_len);
+        if (status == OBSCURA64_OK) {
+            (void)body; (void)body_len;
+            inspection->protection_kind = kind;
+            if (kind > OBSCURA64_PROTECTION_CURRENT_USER)
+                status = OBSCURA64_UNSUPPORTED_PROTECTION;
+            else inspection->current_representation = 1;
+        }
+    }
+    inspection->structural_status = status;
+    return status;
+}
+
 obscura64_status obscura64_protect_alloc(obscura64_protection protection,
     const void *input, size_t input_len, void **output, size_t *output_len)
 {

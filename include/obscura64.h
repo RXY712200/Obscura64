@@ -8,7 +8,7 @@
 #define OBSCURA64_VERSION_MAJOR 2
 #define OBSCURA64_VERSION_MINOR 0
 #define OBSCURA64_VERSION_PATCH 0
-#define OBSCURA64_VERSION_PRERELEASE "preview.3"
+#define OBSCURA64_VERSION_PRERELEASE "preview.4"
 #define OBSCURA64_PROFILE_LIBRARY_VERSION 1
 #define OBSCURA64_PROFILE_SIZE 64
 #define OBSCURA64_PROVIDER_ABI_VERSION 1
@@ -106,6 +106,11 @@ obscura64_status obscura64_read_file_alloc(const char *path_utf8,
 obscura64_status obscura64_read_file_alloc_ex(const char *path_utf8,
     void **output, size_t *output_len, obscura64_file_source *source,
     obscura64_data_format *format);
+/* Explicit in-place maintenance operation under one exclusive file lock.
+ * The target semantic is required. A current V2 primary with the same semantic
+ * succeeds without touching primary or backup. */
+obscura64_status obscura64_upgrade_file(const char *path_utf8,
+    obscura64_protection target_protection);
 
 /* Only V1 builtin Managed Payload is supported. No project state is read or
  * modified. Custom V1 Providers still require the existing V1 context API. */

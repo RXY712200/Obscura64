@@ -23,6 +23,15 @@ obscura64_status obscura64_file_read_all(const wchar_t *path,
 /* Pure V2 file policy. Unknown/future statuses never authorize replacement. */
 int obscura64_file_read_fallback_eligible(obscura64_status status);
 int obscura64_file_write_replaceable_failure(obscura64_status status);
+typedef struct obscura64_upgrade_result {
+    obscura64_file_source source;
+    obscura64_data_format format;
+    obscura64_protection source_protection;
+    obscura64_protection target_protection;
+    int changed;
+} obscura64_upgrade_result;
+obscura64_status obscura64_upgrade_file_ex(const char *path_utf8,
+    obscura64_protection target_protection, obscura64_upgrade_result *result);
 obscura64_status obscura64_lock_acquire_shared(const wchar_t *path, obscura64_lock **lock);
 obscura64_status obscura64_lock_acquire_exclusive(const wchar_t *path, obscura64_lock **lock);
 /* Initial writer locks coordination byte 0 plus transient marker byte 1.

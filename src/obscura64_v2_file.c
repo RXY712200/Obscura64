@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include "obscura64_internal.h"
+#include "obscura64_v2_internal.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -355,4 +356,112 @@ done:
     status = release_with(lock, status);
     paths_free(&paths);
     return status;
+}
+
+obscura64_status obscura64_upgrade_file_ex(const char *path_utf8,
+    obscura64_protection target_protection, obscura64_upgrade_result *result)
+{
+    file_paths paths;
+    obscura64_lock *lock;
+    file_copy primary = {0}, backup = {0};
+    file_copy *source_copy;
+    void *plain = NULL, *new_bytes = NULL;
+    size_t plain_len = 0, new_length = 0;
+    obscura64_data_format format = OBSCURA64_FORMAT_UNKNOWN;
+    obscura64_file_source source = OBSCURA64_FILE_SOURCE_UNKNOWN;
+    obscura64_protection source_protection = OBSCURA64_PROTECTION_NONE;
+    obscura64_status status;
+    int renamed = 0, changed = 0;
+    if (result != NULL) memset(result, 0, sizeof(*result));
+    if (target_protection != OBSCURA64_PROTECTION_NONE &&
+        target_protection != OBSCURA64_PROTECTION_CASUAL &&
+        target_protection != OBSCURA64_PROTECTION_CURRENT_USER)
+        return OBSCURA64_UNSUPPORTED_PROTECTION;
+    status = paths_make(path_utf8, &paths);
+    if (status != OBSCURA64_OK) return status;
+    status = obscura64_lock_acquire_exclusive(paths.lock, &lock);
+    if (status != OBSCURA64_OK) { paths_free(&paths); return status; }
+
+    primary.status = obscura64_file_read_all(paths.target,
+        &primary.bytes, &primary.length);
+    if (primary.status == OBSCURA64_OK)
+        primary.status = validate_bytes(primary.bytes, primary.length,
+            &plain, &plain_len, &format);
+    if (primary.status == OBSCURA64_OK) {
+        source = OBSCURA64_FILE_SOURCE_PRIMARY;
+        source_copy = &primary;
+    } else {
+        if (!obscura64_file_write_replaceable_failure(primary.status)) {
+            status = primary.status; goto done;
+        }
+        backup.status = obscura64_file_read_all(paths.backup,
+            &backup.bytes, &backup.length);
+        if (backup.status == OBSCURA64_OK)
+            backup.status = validate_bytes(backup.bytes, backup.length,
+                &plain, &plain_len, &format);
+        if (backup.status != OBSCURA64_OK) {
+            status = backup.status;
+            if (obscura64_file_write_replaceable_failure(status) &&
+                primary.status != OBSCURA64_FILE_NOT_FOUND)
+                status = primary.status;
+            goto done;
+        }
+        source = OBSCURA64_FILE_SOURCE_BACKUP;
+        source_copy = &backup;
+    }
+    if (format == OBSCURA64_FORMAT_V2) {
+        uint16_t kind;
+        const unsigned char *body;
+        size_t body_len;
+        status = obscura64_v2_envelope_parse(source_copy->bytes,
+            source_copy->length, &kind, &body, &body_len);
+        if (status != OBSCURA64_OK) goto done;
+        (void)body; (void)body_len;
+        source_protection = (obscura64_protection)kind;
+        if (source == OBSCURA64_FILE_SOURCE_PRIMARY &&
+            source_protection == target_protection) {
+            status = OBSCURA64_OK;
+            goto done;
+        }
+    }
+    status = obscura64_protect_alloc(target_protection, plain, plain_len,
+        &new_bytes, &new_length);
+    if (status != OBSCURA64_OK) goto done;
+    if (source == OBSCURA64_FILE_SOURCE_PRIMARY) {
+        status = obscura64_persistence_replace_blob_verified(paths.backup,
+            primary.bytes, primary.length, verify_protected, NULL, &renamed);
+        if (status != OBSCURA64_OK) goto done;
+    }
+    renamed = 0;
+    status = obscura64_persistence_replace_blob_verified(paths.target,
+        (const unsigned char *)new_bytes, new_length,
+        verify_protected, NULL, &renamed);
+    if (status != OBSCURA64_OK && renamed) {
+        int restored = 0;
+        if (obscura64_persistence_replace_blob_verified(paths.target,
+            source_copy->bytes, source_copy->length, verify_protected,
+            NULL, &restored) != OBSCURA64_OK) status = OBSCURA64_IO_ERROR;
+    }
+    if (status == OBSCURA64_OK) changed = 1;
+done:
+    obscura64_free(plain);
+    obscura64_free(new_bytes);
+    free(primary.bytes);
+    free(backup.bytes);
+    status = release_with(lock, status);
+    paths_free(&paths);
+    if (status == OBSCURA64_OK && result != NULL) {
+        result->source = source;
+        result->format = format;
+        result->source_protection = source_protection;
+        result->target_protection = target_protection;
+        result->changed = changed;
+    }
+    return status;
+}
+
+obscura64_status obscura64_upgrade_file(const char *path_utf8,
+    obscura64_protection target_protection)
+{
+    return obscura64_upgrade_file_ex(path_utf8, target_protection, NULL);
 }

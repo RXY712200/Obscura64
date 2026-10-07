@@ -96,6 +96,33 @@ if(MSVC)
 endif()
 add_test(NAME obscura64_v2_file COMMAND obscura64_test_v2_file)
 
+add_executable(obscura64_test_v2_upgrade tests/test_obscura64_v2_upgrade.c)
+target_include_directories(obscura64_test_v2_upgrade PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(obscura64_test_v2_upgrade PRIVATE obscura64_test_support)
+if(MSVC)
+    target_compile_options(obscura64_test_v2_upgrade PRIVATE /W4)
+endif()
+add_test(NAME obscura64_v2_upgrade COMMAND obscura64_test_v2_upgrade)
+
+add_executable(obscura64_cli tools/obscura64.c)
+target_include_directories(obscura64_cli PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(obscura64_cli PRIVATE obscura64)
+set_target_properties(obscura64_cli PROPERTIES OUTPUT_NAME obscura64)
+if(MINGW)
+    target_link_options(obscura64_cli PRIVATE -municode)
+endif()
+if(MSVC)
+    target_compile_options(obscura64_cli PRIVATE /W4)
+endif()
+
+add_executable(obscura64_test_v2_cli tests/test_obscura64_v2_cli.c)
+target_include_directories(obscura64_test_v2_cli PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(obscura64_test_v2_cli PRIVATE obscura64_test_support)
+if(MSVC)
+    target_compile_options(obscura64_test_v2_cli PRIVATE /W4)
+endif()
+add_test(NAME obscura64_v2_cli COMMAND obscura64_test_v2_cli $<TARGET_FILE:obscura64_cli>)
+
 add_executable(obscura64_test_v2_file_policy tests/test_obscura64_v2_file_policy.c)
 target_include_directories(obscura64_test_v2_file_policy PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(obscura64_test_v2_file_policy PRIVATE obscura64_test_support)
@@ -382,6 +409,21 @@ if(MSVC)
     target_compile_options(obscura64_test_v2_file_failure PRIVATE /W4)
 endif()
 add_test(NAME obscura64_v2_file_failure COMMAND obscura64_test_v2_file_failure)
+
+add_executable(obscura64_test_v2_upgrade_failure
+    tests/test_obscura64_v2_upgrade_failure.c ${OBSCURA64_FAULT_TEST_SOURCES})
+target_compile_definitions(obscura64_test_v2_upgrade_failure PRIVATE
+    OBSCURA64_TESTING OBSCURA64_REDUNDANCY_TESTING)
+target_include_directories(obscura64_test_v2_upgrade_failure PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src)
+if(WIN32)
+    target_link_libraries(obscura64_test_v2_upgrade_failure PRIVATE
+        bcrypt crypt32 shell32 ole32 uuid)
+endif()
+if(MSVC)
+    target_compile_options(obscura64_test_v2_upgrade_failure PRIVATE /W4)
+endif()
+add_test(NAME obscura64_v2_upgrade_failure COMMAND obscura64_test_v2_upgrade_failure)
 
 foreach(stage6_test redundancy recovery)
     add_executable(obscura64_test_${stage6_test}

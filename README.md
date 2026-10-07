@@ -5,7 +5,7 @@
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-blue)
 ![Language: C11](https://img.shields.io/badge/language-C11-blue)
 
-**Obscura64 2.0.0-preview.3** — Windows C11 development source. The immutable
+**Obscura64 2.0.0-preview.4** — Windows C11 development source. The immutable
 [v1.0.0 release](https://github.com/RXY712200/Obscura64/releases/tag/v1.0.0)
 remains available for released V1 behavior.
 
@@ -36,6 +36,16 @@ obscura64_free(loaded);
 
 See [Preview 3 reliable files](docs/V2_PREVIEW3.md) for backup, fallback,
 concurrency, and failure semantics.
+
+For explicit maintenance, build `obscura64_cli` (`obscura64.exe`):
+
+```text
+obscura64 inspect settings.ob64
+obscura64 verify settings.ob64
+obscura64 upgrade settings.ob64 --to current-user
+```
+
+The target semantic is always explicit. See [Preview 4 upgrade and tooling](docs/V2_PREVIEW4.md).
 
 The allocation-first API needs no project directory, Profile, or V1 Provider:
 
@@ -83,6 +93,8 @@ recommended.
 - Managed Payload validation and a separate exhaustive builtin Profile recovery CLI.
 
 ## Documentation
+
+- [V2 Preview 4 upgrade and maintenance tooling](docs/V2_PREVIEW4.md)
 
 - [V2 Preview 2 protection and legacy compatibility](docs/V2_PREVIEW2.md)
 - [V2 Preview 3 reliable files](docs/V2_PREVIEW3.md)

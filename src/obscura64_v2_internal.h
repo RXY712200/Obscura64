@@ -13,6 +13,18 @@ obscura64_status obscura64_v2_envelope_parse(const void *data, size_t length,
     uint16_t *kind, const unsigned char **body, size_t *body_len);
 int obscura64_v2_has_magic(const void *data, size_t length);
 
+/* Structural inspection does not decrypt a V2 body. For supported V1 input,
+ * recognition uses the normal full legacy scan. */
+typedef struct obscura64_inspection {
+    obscura64_data_format format;
+    unsigned int version;
+    unsigned int protection_kind;
+    int current_representation;
+    obscura64_status structural_status;
+} obscura64_inspection;
+obscura64_status obscura64_inspect_bytes(const void *data, size_t length,
+    obscura64_inspection *inspection);
+
 obscura64_status obscura64_v2_casual_protect(const void *input, size_t length,
     void **body, size_t *body_len);
 obscura64_status obscura64_v2_casual_unprotect(const void *body, size_t body_len,

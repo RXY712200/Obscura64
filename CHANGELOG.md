@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.0.0-preview.4 — Upgrade and tooling
+
+- Added explicit, single-lock protected-file upgrade to selected V2 semantics,
+  including builtin V1 Managed Payload, conservative backup source selection,
+  and an untouched already-current no-op.
+- Added `obscura64` maintenance CLI for exact-file inspect/verify and safe
+  in-place upgrade with Unicode path support. Kept V1 `obscura64_recover`.
+- Added focused upgrade/CLI tests. No wire format, Provider ABI, or frozen
+  Profile Library changes; Preview 5 hardening remains deferred.
+
 ## 2.0.0-preview.3 — Reliable files
 
 - Independent-review correction: separated nondestructive read fallback from
