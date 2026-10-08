@@ -63,3 +63,9 @@ v2.0.0 publication are separate later gates.
   (`fopen`, `wcscpy` and similar); these are not suppressed and remain for
   independent review. `clang-cl /W4` is used as Clang's documented equivalent
   of `-Wall -Wextra`; `/Wall` would enable `-Weverything` on this driver.
+- [Final code CI run 37732895800](https://github.com/RXY712200/Obscura64/actions/runs/37732895800)
+  passed on commit `8ef16de4de4c4c4e5fe2bddc9c8f7c29849dec7b`:
+  MSVC x64 35/35 plus installed C/C++11 consumers 2/2, MSVC Win32 35/35,
+  and clang-cl x64 35/35. All three jobs built the production sources with
+  zero compiler warnings or errors. Existing tests/tools emitted 187 MSVC
+  x64, 187 MSVC Win32, and 178 clang-cl warnings; these remain visible.
