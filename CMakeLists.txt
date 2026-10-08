@@ -149,6 +149,13 @@ if(MSVC)
 endif()
 add_test(NAME obscura64_v2_mutation COMMAND obscura64_test_v2_mutation)
 
+add_executable(obscura64_test_v2_threading tests/test_obscura64_v2_threading.c)
+target_link_libraries(obscura64_test_v2_threading PRIVATE obscura64_test_support)
+if(MSVC)
+    target_compile_options(obscura64_test_v2_threading PRIVATE /W4)
+endif()
+add_test(NAME obscura64_v2_threading COMMAND obscura64_test_v2_threading)
+
 add_executable(obscura64_test_v2_upgrade tests/test_obscura64_v2_upgrade.c)
 target_include_directories(obscura64_test_v2_upgrade PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(obscura64_test_v2_upgrade PRIVATE obscura64_test_support)

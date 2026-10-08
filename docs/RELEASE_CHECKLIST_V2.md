@@ -34,13 +34,16 @@ v2.0.0 publication are separate later gates.
 ## Local evidence
 
 - CMake 4.3.1-msvc1; MSVC 19.51.36260.0, Visual Studio 18 2026 generator,
-  Release x64 and Win32: 34/34 CTest each. MinGW GCC 16.2.0 x64 and 10.2.0
-  i686, Ninja Release: 34/34 CTest each, zero GCC warnings. Manual GCC C11
-  `-Wall -Wextra -Wpedantic` suite: 34/34 per architecture, zero warnings.
+  Release x64 and Win32: 35/35 CTest each. MinGW GCC 16.2.0 x64 and 10.2.0
+  i686, Ninja Release: 35/35 CTest each, zero GCC warnings. The additional
+  test runs six workers through independent V2 protection and a shared V1
+  context concurrently. Manual GCC C11 `-Wall -Wextra -Wpedantic` suites:
+  35/35 per architecture, zero warnings.
 - External installed-package C and C++11 consumers: 2/2 on MSVC x64 and
   Win32. Direct-source C/C++11 consumers: both pass on GCC i686 and x64.
-- MSVC x64 AddressSanitizer: 3/3 selected path/mutation/envelope tests. The
-  deterministic mutation suite exercises 100,000 parser mutations per run.
+- MSVC x64 AddressSanitizer: 4/4 selected path/mutation/threading/envelope
+  tests. The deterministic mutation suite exercises 100,000 parser mutations
+  per run.
 - MSVC `/analyze` covered the production library. Three diagnostics from the
   first pass included an uninitialized-local warning fixed in Preview 5 and
   two C6386 reports on mathematically bounded allocations/writes; the latter
@@ -48,6 +51,10 @@ v2.0.0 publication are separate later gates.
 - Local 8.3 short-name and symlink creation were unavailable and explicitly
   skipped; hard-link rejection was exercised. No local Clang compiler was
   found. GitHub Actions supplied clang-cl 19.1.5 on Windows Server 2022.
+- Under simultaneous test runs, one MSVC x64 file-locking test and one GCC
+  i686 persistence test failed while removing their temporary directories.
+  Both passed in isolated reruns; the complete serial CTest and strict GCC
+  suites then passed. This cleanup sensitivity remains for independent review.
 - [GitHub Actions run 37631242883](https://github.com/RXY712200/Obscura64/actions/runs/37631242883)
   passed on commit `9b6620ccd4380606d3c2466db0b2712741553b09`:
   MSVC x64 34/34 plus installed consumers 2/2, MSVC Win32 34/34, and
