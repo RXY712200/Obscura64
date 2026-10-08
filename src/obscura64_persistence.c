@@ -18,8 +18,11 @@
 static int valid_arguments(const wchar_t *path, const void *data, size_t size,
                            obscura64_persistence_verify_fn verify)
 {
+#if SIZE_MAX > INT64_MAX
+    if (size > (size_t)INT64_MAX) return 0;
+#endif
     return path != NULL && path[0] != L'\0' && data != NULL && size != 0 &&
-           size <= (size_t)INT64_MAX && verify != NULL;
+           verify != NULL;
 }
 
 static obscura64_status write_exact(HANDLE file, const unsigned char *data, size_t size)
