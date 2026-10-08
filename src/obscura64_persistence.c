@@ -193,9 +193,13 @@ static obscura64_status replace_once(const wchar_t *path, const unsigned char *d
         else {
             *renamed = 1;
             /* AFTER_REPLACE is an observation/crash point in test builds only. */
+#ifdef OBSCURA64_TESTING
             if (FAULT(OBSCURA64_FAULT_AFTER_REPLACE, path, temporary) ||
-                FAULT(OBSCURA64_FAULT_FINAL_REOPEN, path, temporary)) status = OBSCURA64_IO_ERROR;
-            else status = verify_file(path, data, size, verify, user_data);
+                FAULT(OBSCURA64_FAULT_FINAL_REOPEN, path, temporary))
+                status = OBSCURA64_IO_ERROR;
+            else
+#endif
+                status = verify_file(path, data, size, verify, user_data);
             if (status == OBSCURA64_OK && FAULT(OBSCURA64_FAULT_POST_VERIFY, path, temporary))
                 status = OBSCURA64_STATE_CORRUPT;
         }
