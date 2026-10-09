@@ -30,8 +30,9 @@ int main(void)
     unsigned char output[sizeof(payload)];
     void *allocated = (void *)1;
     size_t n = 999;
-    CHECK("version", OBSCURA64_VERSION_MAJOR == 2 &&
-        strcmp(OBSCURA64_VERSION_PRERELEASE, "preview.5") == 0);
+    CHECK("stable version", OBSCURA64_VERSION_MAJOR == 2 &&
+        OBSCURA64_VERSION_MINOR == 0 && OBSCURA64_VERSION_PATCH == 0 &&
+        strcmp(OBSCURA64_VERSION_PRERELEASE, "") == 0);
     CHECK("semantic values", OBSCURA64_PROTECTION_NONE == 0 &&
         OBSCURA64_PROTECTION_CASUAL == 1 && OBSCURA64_PROTECTION_CURRENT_USER == 2);
     CHECK("operation-driven size query", obscura64_protect(OBSCURA64_PROTECTION_NONE,
