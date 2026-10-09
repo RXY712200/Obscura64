@@ -1,3 +1,5 @@
+> **Historical Preview 1 development record.** For stable Obscura64 v2.0.0, see the [current V2 guide](V2_GUIDE.md) and [release notes](RELEASE_NOTES_V2.0.0.md). Future-work statements below describe the state at this historical milestone.
+
 # Obscura64 2.0.0-preview.1
 
 This records the tagged Preview 1 baseline. For current Preview 2 behavior,

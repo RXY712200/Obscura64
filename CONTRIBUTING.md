@@ -31,7 +31,7 @@ architecture, commands, results, and any untested areas. The verified v1.0.0
 environment is MinGW GCC/G++ 10.2.0, i686-w64-mingw32, C11, with
 `-Wall -Wextra -Wpedantic`; keep those builds warning-clean.
 
-For V2, use a clean Windows CMake build and CTest on MSVC x64/Win32 and
+For stable V2.0.0 and later compatible maintenance releases, use a clean Windows CMake build and CTest on MSVC x64/Win32 and
 Clang x64 when available, plus strict C11 `-Wall -Wextra -Wpedantic` manual
 regression on MinGW GCC i686/x64. Run installed C and C++11 consumers from
 `tests/package_consumer` against a temporary install prefix. Use
@@ -54,3 +54,14 @@ Do not commit `.exe`, `.o`, `.obj`, `.dll`, other build artifacts, caches,
 temporary output, runtime `.obscura64` state, local developer paths, or secrets.
 Remove private data from examples and logs. For security-sensitive findings,
 follow [SECURITY.md](SECURITY.md).
+
+
+## Stable release maintenance
+
+The primary supported product line is now V2.0.0, with V1 compatibility
+maintained. Changes to public API, stable protection semantics, wire formats,
+deterministic fixtures, or destructive-overwrite rules require explicit
+compatibility review. A bug fix must not silently rewrite existing protected
+data. Keep Windows CI and installed-package consumers green. Preview documents
+are historical records: update `docs/V2_GUIDE.md` and `CHANGELOG.md` for
+current user-facing behavior.

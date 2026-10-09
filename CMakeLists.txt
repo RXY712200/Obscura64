@@ -9,7 +9,7 @@ endif()
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 include(CTest)
-set(OBSCURA64_VERSION_PRERELEASE "preview.5")
+set(OBSCURA64_VERSION_PRERELEASE "")
 option(OBSCURA64_BUILD_TOOLS "Build command-line tools" ON)
 option(OBSCURA64_INSTALL_TOOLS "Install command-line tools" OFF)
 

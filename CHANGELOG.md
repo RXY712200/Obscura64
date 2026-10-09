@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.0.0 — Stable release
+
+- Promoted five independently reviewed V2 Preview milestones into the
+  stable Windows C11 protected-local-blob lifecycle library.
+- Shipped NONE, CASUAL, and CURRENT_USER protection semantics, strict versioned
+  envelope parsing, and precise validation boundaries.
+- Shipped allocating memory APIs; reliable protected-file read/write with
+  one validated backup, conservative fallback, explicit upgrade, and
+  inspect/verify/upgrade maintenance CLI.
+- Finalized real Windows CMake/CTest, exported installed library target
+  `Obscura64::obscura64`, Windows CI, and the canonical V2 guide.
+- Preserved released V1 public APIs, wire formats, frozen Profiles, and
+  Provider ABI 1. Distributed under MIT.
+- [Stable release notes](docs/RELEASE_NOTES_V2.0.0.md).
+
+Historical Preview entries below record development milestones, not current
+unfinished product features.
+
+
 ## 2.0.0-preview.5 — Hardening and V2 closure
 
 - Added bounded Windows path alias handling: canonical existing parents and

@@ -1,0 +1,95 @@
+name: Publish Obscura64 v2.0.0
+
+# Publication occurs only after a successful Windows CI run for the
+# exact current main commit; manual source/tag editing cannot bypass this gate.
+on:
+  workflow_run:
+    workflows: ["Windows V2"]
+    types: [completed]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.head_repository.full_name == github.repository &&
+          github.repository == 'RXY712200/Obscura64' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Verify approved tags, release version and publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$RELEASE_SHA"
+          test -f docs/RELEASE_NOTES_V2.0.0.md
+          grep -Fqx '#define OBSCURA64_VERSION_MAJOR 2' include/obscura64.h
+          grep -Fqx '#define OBSCURA64_VERSION_MINOR 0' include/obscura64.h
+          grep -Fqx '#define OBSCURA64_VERSION_PATCH 0' include/obscura64.h
+          grep -Fqx '#define OBSCURA64_VERSION_PRERELEASE ""' include/obscura64.h
+          grep -Fqx 'set(OBSCURA64_VERSION_PRERELEASE "")' CMakeLists.txt
+          git fetch --tags origin
+
+          # Refuse any rewritten previously approved tag.
+          for entry in \
+            'v1.0.0:f255d84cf08a1c02d0ef2d5b9eb79c9719a36e25' \
+            'v2.0.0-preview.1:a6e4f62988c919e4f88d0db8c60461c7fdf34072' \
+            'v2.0.0-preview.2:07f8e897a820830ff69b1037bf4c44711e382e49' \
+            'v2.0.0-preview.3:e12715a2dab99bdcd234b215c256e5b52a0f7cb7' \
+            'v2.0.0-preview.4:25ccd0ca76b2aba2544ef606652b98d89b9ce40a'; do
+            tag="${entry%%:*}"
+            expected="${entry#*:}"
+            actual="$(git rev-parse "refs/tags/${tag}^{commit}")"
+            test "$actual" = "$expected" || { echo "Immutable tag mismatch: $tag"; exit 1; }
+          done
+
+          # Subsequent main commits must never issue another v2.0.0 release.
+          if gh release view v2.0.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v2.0.0 Release already exists; no action needed."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Preview 5 identifies the independently approved source checkpoint.
+          if git rev-parse -q --verify refs/tags/v2.0.0-preview.5 >/dev/null; then
+            test "$(git rev-parse 'refs/tags/v2.0.0-preview.5^{commit}')" = \
+              "1e621e37171e9ce195b83c300ccbf7115145116d"
+          else
+            git tag -a v2.0.0-preview.5 \
+              -m "Obscura64 v2.0.0-preview.5" \
+              1e621e37171e9ce195b83c300ccbf7115145116d
+            git push origin refs/tags/v2.0.0-preview.5
+          fi
+
+          # A preexisting stable tag must not be moved or silently repurposed.
+          if git rev-parse -q --verify refs/tags/v2.0.0 >/dev/null; then
+            test "$(git rev-parse 'refs/tags/v2.0.0^{commit}')" = "$RELEASE_SHA"
+          else
+            git tag -a v2.0.0 -m "Obscura64 v2.0.0" "$RELEASE_SHA"
+            git push origin refs/tags/v2.0.0
+          fi
+
+          gh release create v2.0.0 \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "Obscura64 v2.0.0" \
+            --notes-file docs/RELEASE_NOTES_V2.0.0.md \
+            --latest
+
+          gh release view v2.0.0 --repo "$GITHUB_REPOSITORY" \
+            --json tagName,url,isDraft,isPrerelease

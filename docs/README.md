@@ -1,60 +1,49 @@
-# Obscura64 Documentation
+# Obscura64 documentation
 
-Design, stable file formats, persistence, recovery, release information, and
-compatibility notes for Obscura64. V2 Casual is reversible obfuscation;
-V2 CurrentUser delegates protection to Windows DPAPI.
+**Current stable release: [v2.0.0](https://github.com/RXY712200/Obscura64/releases/tag/v2.0.0)** · Windows C11 · MIT.
 
 ## Start here
 
-- [Current V2 guide](V2_GUIDE.md)
-- [V2 release candidate checklist](RELEASE_CHECKLIST_V2.md)
-- [V2 Preview 4 upgrade and maintenance tooling](V2_PREVIEW4.md)
+- [V2 user guide](V2_GUIDE.md) — authoritative current API, file, upgrade, security, and build documentation
+- [v2.0.0 release notes](RELEASE_NOTES_V2.0.0.md) — features, compatibility, installation, known limits
+- [V2 validation record](RELEASE_CHECKLIST_V2.md) — actual development and release-preparation evidence
+- [Project README](../README.md) — overview and quick start
+- [Changelog](../CHANGELOG.md) — release and development chronology
 
-- [V2 Preview 2 protection and legacy compatibility](V2_PREVIEW2.md)
-- [V2 Preview 3 reliable files](V2_PREVIEW3.md)
-- [V2 Preview 1](V2_PREVIEW1.md)
-- [Project README](../README.md)
+## V1 compatibility and frozen identities
+
 - [V1 specification](OBSCURA64_V1_SPEC.md)
-- [Managed Payload V1](MANAGED_PAYLOAD_V1.md)
-- [Recovery V1](RECOVERY_V1.md)
-
-## Stable formats and identities
-
-- [Profile Library V1](PROFILE_LIBRARY_V1.md)
-- [Project State V1](PROJECT_STATE_V1.md)
-- [Project History V1](PROJECT_HISTORY_V1.md)
-- [Managed Payload V1](MANAGED_PAYLOAD_V1.md)
-
-## Recovery and persistence
-
-- [Recovery policy and limits](RECOVERY_V1.md)
-- [Current state and verified persistence](PROJECT_STATE_V1.md)
-- [History retention and consistency](PROJECT_HISTORY_V1.md)
-
-## Release information
-
-- [Changelog](../CHANGELOG.md)
+- [Frozen Profile Library](PROFILE_LIBRARY_V1.md)
+- [Project State](PROJECT_STATE_V1.md)
+- [Project History](PROJECT_HISTORY_V1.md)
+- [Managed Payload](MANAGED_PAYLOAD_V1.md)
+- [V1 recovery policy](RECOVERY_V1.md)
 - [v1.0.0 release notes](RELEASE_NOTES_V1.0.0.md)
-- [V1 release checklist and validation evidence](RELEASE_CHECKLIST_V1.md)
-- [Published v1.0.0 Release](https://github.com/RXY712200/Obscura64/releases/tag/v1.0.0)
+- [V1 validation checklist](RELEASE_CHECKLIST_V1.md)
+- [Published v1.0.0](https://github.com/RXY712200/Obscura64/releases/tag/v1.0.0)
 
-## Project and attribution
+## Historical V2 Preview records
 
-- [Contributing](../CONTRIBUTING.md)
-- [Support](../SUPPORT.md)
-- [Security policy](../SECURITY.md)
+These explain V2 development and review. They are **historical milestones**,
+not alternatives to the stable V2 user guide.
+
+- [Preview 1 — envelope and API](V2_PREVIEW1.md)
+- [Preview 2 — protection and V1 compatibility](V2_PREVIEW2.md)
+- [Preview 3 — reliable protected files](V2_PREVIEW3.md)
+- [Preview 4 — upgrade and maintenance tooling](V2_PREVIEW4.md)
+
+Preview 5's hardening and review are recorded in the
+[V2 validation record](RELEASE_CHECKLIST_V2.md) and
+[Issue #2](https://github.com/RXY712200/Obscura64/issues/2).
+
+## Community and examples
+
+- [Contributing](../CONTRIBUTING.md) · [Support](../SUPPORT.md)
+- [Security policy](../SECURITY.md) · [MIT License](../LICENSE)
 - [Third-party references](THIRD_PARTY_REFERENCES.md)
-- [MIT License](../LICENSE)
+- [V1 Managed example](../examples/managed_quickstart.c)
+- [V1 raw codec example](../examples/raw_codec.c)
+- [Development log](https://github.com/RXY712200/Obscura64/issues/1)
 
-## Examples
-
-- [Managed Payload quick start](../examples/managed_quickstart.c)
-- [Raw Codec example](../examples/raw_codec.c)
-
-## Project status
-
-[Issue #1 — Development Log, Known Issues & Roadmap](https://github.com/RXY712200/Obscura64/issues/1)
-tracks the current state, known validation gaps, and chronological maintenance
-updates. Real CMake/CTest, MSVC, and Clang validation remain open work; Preview 2
-was manually built and tested with GCC 10.2.0 i686 and GCC 16.2.0 x64 Windows. The open
-validation items are not currently known v1.0.0 functional defects.
+The README and V2 guide include current V2 C examples. External installed
+C/C++ package consumers are in `tests/package_consumer/`.

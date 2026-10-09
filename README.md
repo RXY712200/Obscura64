@@ -1,46 +1,60 @@
 # Obscura64
 
-[![Release: v1.0.0](https://img.shields.io/badge/release-v1.0.0-blue)](https://github.com/RXY712200/Obscura64/releases/tag/v1.0.0)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-![Platform: Windows](https://img.shields.io/badge/platform-Windows-blue)
-![Language: C11](https://img.shields.io/badge/language-C11-blue)
+[![Release v2.0.0](https://img.shields.io/badge/release-v2.0.0-blue)](https://github.com/RXY712200/Obscura64/releases/tag/v2.0.0)
+[![Windows CI](https://github.com/RXY712200/Obscura64/actions/workflows/windows-v2.yml/badge.svg)](https://github.com/RXY712200/Obscura64/actions/workflows/windows-v2.yml)
+[![MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+![Windows](https://img.shields.io/badge/platform-Windows-blue)
+![C11](https://img.shields.io/badge/language-C11-blue)
 
-**Obscura64 2.0.0-preview.5** — Windows C11 development source. The immutable
-[v1.0.0 release](https://github.com/RXY712200/Obscura64/releases/tag/v1.0.0)
-remains available for released V1 behavior.
+**Obscura64 2.0.0** is a Windows C11 library for the lifecycle of **protected local application bytes and files**. Give it binary data, choose a protection semantic, and let it handle versioned envelopes, validation, reliable file replacement, one validated backup, fallback, and explicit migration. It is not a database, serializer, DRM system, or home-grown cryptography framework.
 
-Obscura64 is a Windows C11 library for the lifecycle of protected local
-application blobs. Its V2 byte and file APIs take an explicit protection
-choice and return a versioned representation. V1 project/Profile APIs remain
-available for compatibility.
+The historical [v1.0.0 release](https://github.com/RXY712200/Obscura64/releases/tag/v1.0.0) remains available. V1 APIs and frozen data formats remain compatible.
 
-Choose a protection semantic explicitly: `NONE` leaves bytes plain, `CASUAL`
-provides reversible obfuscation with corruption checks, and `CURRENT_USER`
-delegates genuine user-bound protection to Windows DPAPI and validates an
-inner Obscura64 record after decryption. Casual is not encryption; Obscura64
-does not invent cryptography.
+## Choose the protection you actually need
 
-## V2 Quick Start
+| Semantic | What you get | What you **do not** get |
+| --- | --- | --- |
+| `NONE` | A versioned envelope and the same file lifecycle, with plain application bytes | Confidentiality, integrity, or authentication |
+| `CASUAL` | Reversible obfuscation and corruption checks, without managing a secret | Encryption or attacker-resistant authentication |
+| `CURRENT_USER` | Windows DPAPI current-user protection plus validated Obscura64 inner format | Portability, DRM, or a server trust boundary |
 
-For one protected local file, pass a full UTF-8 Windows path whose parent exists:
+Choose explicitly; the library never silently selects a mode. The implementation may use Profile data or DPAPI internally, but ordinary V2 callers do not need Profile IDs, Providers, project generations, or key-management parameters.
+
+## Start with one protected file
+
+The parent directory must already exist. The file API takes an **absolute UTF-8 Windows path**.
 
 ```c
-const char *path = "C:\\app-data\\settings.ob64";
-const unsigned char settings[] = {0, 1, 255};
-void *loaded = NULL;
-size_t loaded_len = 0;
-obscura64_status status = obscura64_write_file(path,
-    OBSCURA64_PROTECTION_CURRENT_USER, settings, sizeof(settings));
-if (status == OBSCURA64_OK)
-    status = obscura64_read_file_alloc(path, &loaded, &loaded_len);
-/* Use loaded only when status is OBSCURA64_OK. */
-obscura64_free(loaded);
+#include "obscura64.h"
+#include <stddef.h>
+
+int main(void)
+{
+    const char *path = "C:\\existing-directory\\settings.ob64";
+    const unsigned char settings[] = {0, 1, 255, 0};
+    void *loaded = NULL;
+    size_t loaded_len = 0;
+    obscura64_status s = obscura64_write_file(
+        path, OBSCURA64_PROTECTION_CURRENT_USER, settings, sizeof(settings));
+
+    if (s == OBSCURA64_OK)
+        s = obscura64_read_file_alloc(path, &loaded, &loaded_len);
+
+    /* Check s and loaded_len before consuming loaded. */
+    obscura64_free(loaded);
+    return s == OBSCURA64_OK ? 0 : 1;
+}
 ```
 
-See the [current V2 guide](docs/V2_GUIDE.md) for backup, fallback,
-concurrency, installation, and security limits.
+A write verifies a same-directory replacement and maintains one adjacent `<file>.ob64.bak`. Reads prefer the primary and can validate/fall back to the backup without rewriting the primary. Cooperation is coordinated by `<file>.ob64.lock`; contention returns `OBSCURA64_BUSY`. A failed DPAPI unprotect does **not** authorize destructive overwrite.
 
-For explicit maintenance, build `obscura64_cli` (`obscura64.exe`):
+For in-memory protection, use `obscura64_protect_alloc` and `obscura64_unprotect_alloc`. All `*_alloc` results are length-delimited (not strings) and released with `obscura64_free`. `unprotect` automatically dispatches supported V2 kinds and recognizes builtin V1 Managed Payload.
+
+The canonical [V2 user guide](docs/V2_GUIDE.md) covers exact failure precedence, backup evolution, concurrency, path restrictions, thread safety, ownership, and security limits.
+
+## Maintenance CLI
+
+Build the optional `obscura64_cli` target to get `obscura64.exe`:
 
 ```text
 obscura64 inspect settings.ob64
@@ -48,206 +62,52 @@ obscura64 verify settings.ob64
 obscura64 upgrade settings.ob64 --to current-user
 ```
 
-The target semantic is always explicit. See the [V2 guide](docs/V2_GUIDE.md).
+- `inspect` identifies the named protected file structurally without printing plaintext.
+- `verify` validates exactly that file (no backup fallback). Its output distinguishes the guarantees of NONE, CASUAL, CURRENT_USER, and V1 Managed.
+- `upgrade` explicitly converts supported old data or changes a V2 protection semantic under one exclusive lock. It refuses to overwrite potentially valid but inaccessible CurrentUser data and preserves the appropriate original protected bytes as backup.
 
-The allocation-first API needs no project directory, Profile, or V1 Provider:
+Changing `CURRENT_USER` to `CASUAL` or `NONE` is allowed only when explicitly requested; it is **not** a security improvement. The specialized V1 `obscura64_recover` CLI remains available for builtin Managed Payload disaster recovery.
 
-```c
-#include "obscura64.h"
-#include <string.h>
+## Build and integrate
 
-int main(void)
-{
-    const unsigned char input[] = {0, 1, 255, 0};
-    void *protected_bytes = NULL, *decoded = NULL;
-    size_t protected_len = 0, decoded_len = 0;
-    obscura64_status status = obscura64_protect_alloc(
-        OBSCURA64_PROTECTION_CURRENT_USER, input, sizeof(input),
-        &protected_bytes, &protected_len);
-    if (status == OBSCURA64_OK)
-        status = obscura64_unprotect_alloc(protected_bytes, protected_len,
-            &decoded, &decoded_len);
-    int matches = status == OBSCURA64_OK && decoded_len == sizeof(input) &&
-        memcmp(decoded, input, sizeof(input)) == 0;
-    obscura64_free(decoded);
-    obscura64_free(protected_bytes);
-    return matches ? 0 : 1;
-}
+Requires Windows, a C11-capable compiler, and CMake 3.16+ for the supported package build.
+
+```powershell
+cmake -S . -B build -DBUILD_TESTING=ON
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
+cmake --install build --config Release --prefix "C:/obscura64-install"
 ```
 
-Choose `OBSCURA64_PROTECTION_CASUAL` for portable obscurity without a secret,
-or explicit `NONE` only when no protection is intended. Unprotect identifies
-the V2 kind automatically and can also read supported V1 builtin Managed
-Payload data. [Preview 2 details](docs/V2_PREVIEW2.md) cover security limits,
-legacy recognition, and migration. Caller-buffer forms are available, but a
-size query and retry are separate backend operations; allocation-first use is
-recommended.
+An external C or C++ project can then use:
 
-## V1 Features and Compatibility
+```cmake
+find_package(Obscura64 CONFIG REQUIRED)
+target_link_libraries(your_app PRIVATE Obscura64::obscura64)
+```
 
-- Windows-only C11 library with a C and C++ callable public header and opaque context.
-- Custom Profile-based Base64-style codec and a frozen library of 4096 unique Profiles.
-- Windows BCrypt CSPRNG Profile selection and strict canonical padded decoding.
-- Binary-safe, explicit-length buffer APIs and allocating convenience APIs.
-- Built-in Provider, runtime custom Providers, and a compile-time default Provider override.
-- Project-level `obscura64_open` with UTF-8 Windows paths, stable Project ID, and generation tracking.
-- Explicit Force Reinitialize with preservation of the latest three historical Profiles.
-- Verified persistence, process coordination, LocalAppData redundancy and automatic state recovery.
-- Managed Payload validation and a separate exhaustive builtin Profile recovery CLI.
+Pass the installation prefix through `CMAKE_PREFIX_PATH`. Set `BUILD_TESTING=OFF` for a smaller production-only build; `OBSCURA64_BUILD_TOOLS` and `OBSCURA64_INSTALL_TOOLS` control the CLI tools, while `OBSCURA64_BUILD_EXAMPLES` is opt-in. Direct C-source integration is also supported: compile implementation files as C, include only `include/obscura64.h` in consumers, and link Windows `bcrypt`, `crypt32`, `shell32`, `ole32`, and `uuid`.
+
+**Validation at the v2.0.0 release candidate:** MSVC x64/Win32, clang-cl x64, and MinGW GCC i686/x64 full 35-test suites; installed C/C++11 consumers; selected AddressSanitizer; deterministic parser mutations and crash tests. See the [V2 validation record](docs/RELEASE_CHECKLIST_V2.md) and [Windows CI](https://github.com/RXY712200/Obscura64/actions/workflows/windows-v2.yml). This is not a guarantee for every filesystem, configuration, or crash condition.
+
+## Compatibility and boundaries
+
+- V1 Profile/Provider/project APIs remain available; V1 State, History, Managed Payload, Provider ABI v1, and the 4096 frozen Profiles retain their existing formats/identities.
+- Automatic legacy recognition covers **builtin V1 Managed Payload** only. Arbitrary V1 custom Providers still require their original V1 context.
+- The versioned V2 envelope, Casual body, and CurrentUser inner record retain their reviewed wire layouts.
+- File API paths must be full UTF-8 Windows paths with existing parents. Existing multi-hard-link targets and target reparse points are rejected; normal path aliases are resolved where Windows supports it. A hostile filesystem writer that ignores Obscura64's lock is not coordinated.
+- `NONE` has no integrity check. CASUAL and V1 digests are public corruption checks, **not** cryptographic signatures. CURRENT_USER delegates real user-bound protection to Windows DPAPI but does not make client-side data authoritative.
+- Obscura64 does not guarantee survival of arbitrary hardware/controller power loss and does not implement streaming, cross-platform key management, or a general encryption framework.
 
 ## Documentation
 
-- [Current V2 guide](docs/V2_GUIDE.md)
-- [V2 release candidate checklist](docs/RELEASE_CHECKLIST_V2.md)
-- [V2 Preview 4 upgrade and maintenance tooling](docs/V2_PREVIEW4.md)
-
-- [V2 Preview 2 protection and legacy compatibility](docs/V2_PREVIEW2.md)
-- [V2 Preview 3 reliable files](docs/V2_PREVIEW3.md)
-- [V2 Preview 1 format, API, security boundary, and V1 compatibility](docs/V2_PREVIEW1.md)
+- [V2 guide](docs/V2_GUIDE.md) — canonical current user documentation
+- [v2.0.0 release notes](docs/RELEASE_NOTES_V2.0.0.md)
+- [Changelog](CHANGELOG.md) and [validation record](docs/RELEASE_CHECKLIST_V2.md)
 - [Documentation index](docs/README.md)
-- [V1 specification](docs/OBSCURA64_V1_SPEC.md)
-- [Managed Payload V1](docs/MANAGED_PAYLOAD_V1.md)
-- [Recovery policy and limits](docs/RECOVERY_V1.md)
-- [Changelog](CHANGELOG.md) and [v1.0.0 release notes](docs/RELEASE_NOTES_V1.0.0.md)
-- [Published v1.0.0 Release](https://github.com/RXY712200/Obscura64/releases/tag/v1.0.0)
-- [Issue #1 — Development Log, Known Issues & Roadmap](https://github.com/RXY712200/Obscura64/issues/1)
+- [V1 specification](docs/OBSCURA64_V1_SPEC.md), [V1 Managed Payload](docs/MANAGED_PAYLOAD_V1.md), [V1 recovery](docs/RECOVERY_V1.md)
+- [Historical Preview 1–4 development notes](docs/README.md#historical-v2-preview-records)
+- [Security policy](SECURITY.md), [Contributing](CONTRIBUTING.md), [MIT License](LICENSE)
+- [Development log (Issue #1)](https://github.com/RXY712200/Obscura64/issues/1)
 
-## V1 Quick Start (Managed Payload)
-
-Include `obscura64.h` and pass an **existing project directory** as a UTF-8 path. This example accepts that directory as its command-line argument:
-
-```c
-#include "obscura64.h"
-#include <stdio.h>
-
-int main(int argc, char **argv)
-{
-    const char data[] = "coins=1000\nlevel=20\nunlock=0\n";
-    obscura64_context *context = NULL;
-    char *encoded = NULL;
-    void *decoded = NULL;
-    size_t encoded_len = 0, decoded_len = 0;
-    obscura64_status status;
-
-    if (argc != 2) {
-        fprintf(stderr, "usage: quick_start <existing-project-directory>\n");
-        return 1;
-    }
-    status = obscura64_open(argv[1], &context);
-    if (status != OBSCURA64_OK) goto cleanup;
-    status = obscura64_managed_encode_alloc(context, data, sizeof(data) - 1,
-                                   &encoded, &encoded_len);
-    if (status != OBSCURA64_OK) goto cleanup;
-    status = obscura64_managed_decode_alloc(context, encoded, encoded_len,
-                                   &decoded, &decoded_len);
-    if (status == OBSCURA64_OK) fwrite(decoded, 1, decoded_len, stdout);
-
-cleanup:
-    obscura64_free(decoded);
-    obscura64_free(encoded);
-    obscura64_context_destroy(context);
-    if (status != OBSCURA64_OK)
-        fprintf(stderr, "%s\n", obscura64_status_string(status));
-    return status == OBSCURA64_OK ? 0 : 1;
-}
-```
-
-Encoded and decoded buffers use explicit lengths and are not NUL-terminated. Release allocating API results with `obscura64_free`.
-
-Managed Payload wraps bytes in the fixed V1 envelope before the context Provider encodes them. It validates magic, length and SHA-256 on decode, detecting corruption and wrong-Profile use. Empty payloads still produce a nonempty encoded envelope. Raw Codec only transforms bytes and cannot validate wrong-Profile use. See [Managed Payload V1](docs/MANAGED_PAYLOAD_V1.md), [managed example](examples/managed_quickstart.c), and [raw example](examples/raw_codec.c).
-
-## Project State
-
-The first successful open creates `<project>/.obscura64/current.state`. Later opens validate and reuse it without changing the Profile. Force Reinitialize also maintains `<project>/.obscura64/history.state`.
-
-Back up and migrate `.obscura64` together with the project data. An existing state directory with missing or corrupt current triggers validated automatic recovery. If no usable source exists, open returns `OBSCURA64_UNRECOVERABLE`; it never creates a replacement identity.
-
-Force Reinitialize keeps Project ID, increments generation, and chooses a different Profile. Existing contexts retain their old Profile; callers should retire old contexts when finished. Previously encoded data is not automatically migrated to the new Profile.
-
-Stage 5 persistence hardening is complete: verified same-directory replacement, managed current/history consistency checks, Windows shared/exclusive kernel locking, and deterministic failure/process-crash tests. Normal open uses a shared lock and only requires valid current; Force uses an exclusive lock and requires consistent history when generations require it. Existing-project lock contention returns BUSY without waiting. First-initialization race coordination alone permits a bounded grace of at most 240ms; a kernel-only marker distinguishes it from ordinary mutation. The persistent, empty `operation.lock` file is not ownership; process exit releases its kernel locks. Stale temp files are ignored and preserved. Stage 6 adds recovery and per-user redundancy as described below.
-
-These tests do not certify all power-loss, filesystem or controller failure scenarios. File flush and write-through replacement are used; no universal directory-durability guarantee is claimed. See the [state persistence notes](docs/PROJECT_STATE_V1.md).
-
-Stage 6 is complete: a per-user LocalAppData mirror stores the existing current/history formats. Valid project current always wins. Automatic recovery prefers exact backup current, then recent history; history fallback may roll back the Profile and cannot promise decoding data from a lost newer Profile. Backup maintenance is best-effort and never rolls back a successful primary operation. See [recovery behavior and limits](docs/RECOVERY_V1.md).
-
-## Security Model
-
-V1 and V2 Casual provide reversible obfuscation, not cryptographic confidentiality. V1 Managed Payload, V1 state/history, and V2 Casual SHA-256 digests detect corruption; they are not secret authentication. Someone who understands those formats can modify data and recompute their digests. V2 CurrentUser instead delegates Windows user-bound protection to DPAPI.
-
-Authorization systems and anti-cheat systems must not trust client-side data merely because it is protected locally. Neither the Casual algorithm nor the frozen Profile Library is secret. CurrentUser is tied to the Windows user environment and is not portable or a server trust boundary.
-
-## Frozen Profile Library
-
-- Profile count: **4096**.
-- Canonical payload: **262144 bytes**.
-- Profile Library V1 SHA-256:
-
-```text
-8842cc4aa32bcb300937835f72aaacfd088568d1bfecd01811603c4f16e7280a
-```
-
-This is a frozen library identity/integrity reference, not a secret or a measure of security strength. The runtime table is embedded in the library; ordinary callers do not load the audit artifacts from `generated/`. The candidate artifact retains its historical `RB64_PROFILE_LIBRARY_CANDIDATE_V1` magic; see [Profile Library V1](docs/PROFILE_LIBRARY_V1.md).
-
-## Build
-
-Requirements: Windows, a C11-capable C compiler, and Windows BCrypt/Crypt32/Shell/OLE libraries. Link with `bcrypt`, `crypt32`, `shell32`, `ole32`, and `uuid` (`-lbcrypt -lcrypt32 -lshell32 -lole32 -luuid` with MinGW).
-
-CMake is a development/build/test tool, not a runtime dependency. To integrate directly into a Windows C/C++ project, add all implementation `.c` files and supporting private headers from `src/`, add `include/` to the compiler include path, and link `bcrypt`, `crypt32`, `shell32`, `ole32`, and `uuid`. Compile implementation files as C; callers include only `obscura64.h`.
-
-The repository includes a CMake configuration:
-
-```text
-cmake -S . -B build
-cmake --build build --config Debug
-cd build
-ctest -C Debug --output-on-failure
-```
-
-CMake builds and CTest are supported on Windows. Set `BUILD_TESTING=OFF` for
-downstream builds without formal tests. `OBSCURA64_BUILD_TOOLS=OFF` omits the
-CLI tools; examples remain opt-in. Installation exports
-`Obscura64::obscura64` for `find_package(Obscura64 CONFIG REQUIRED)`. See the
-[V2 guide](docs/V2_GUIDE.md) for direct-source and installed-package use.
-
-Advanced integrations may select a compile-time default Provider with the `OBSCURA64_DEFAULT_PROVIDER_SYMBOL` CMake setting and provide the named `obscura64_provider` instance in their linked sources.
-
-## Tests
-
-Test categories cover smoke/link checks, Profile validation and generation, the frozen library, runtime selection, strict codec behavior, public APIs, Providers, state formats, project initialization and reopening, Force Reinitialize/history retention, multi-process locking, and deterministic persistence failure/process-crash handling. Managed Payload, exhaustive Profile recovery, and Unicode CLI safety are also covered. Tests use standard C and Windows APIs without a third-party test framework.
-
-## Disaster Recovery Tool
-
-Build the source target `obscura64_recover` and run (manual MinGW CLI linking also needs `-municode` for its Unicode entry point):
-
-```text
-obscura64_recover <encoded-input-file> <new-decoded-output-file>
-```
-
-The CLI uses Unicode Windows paths, reads the exact input bytes without trimming, and scans all 4096 frozen builtin Profiles. Only a unique valid Managed Payload envelope is accepted. It prints the recovered ID and full Profile and writes binary payload bytes to a new file; existing outputs are never overwritten. It does not open, initialize, repair or modify any project state. Raw data and arbitrary custom Provider transports are unsupported. Recovery of payload/Profile does not reconstruct Project ID, generation or history. See [recovery limits](docs/RECOVERY_V1.md).
-
-## Current Status and Roadmap
-
-V1 development stages and release preparation are complete. Frozen Profile Library V1 content and ID order remain unchanged.
-
-- Stage 0: Specification — complete.
-- Stage 1: Codec Core — complete.
-- Stage 2: Profile System — complete.
-- Stage 3: Public API / Provider — complete.
-- Stage 4: Project State / History — complete.
-- Stage 5: Persistence Hardening — complete.
-- Stage 6: Redundancy / Recovery — complete.
-- Stage 7: Managed Payload / Disaster Recovery / V1 Preparation — complete.
-
-V2 Previews 1–4 passed independent review. Preview 5 hardening and closure is
-the current development source and awaits independent review. Streaming is not implemented.
-CurrentUser uses Windows DPAPI; Obscura64 does not implement a custom
-encryption algorithm. Optional examples can be built with
-`OBSCURA64_BUILD_EXAMPLES=ON`; this is not required for source integration.
-
-See the [V2 release candidate checklist](docs/RELEASE_CHECKLIST_V2.md) for
-actual current validation and remaining gates. The stable v1.0.0 release and
-its [V1 checklist](docs/RELEASE_CHECKLIST_V1.md) remain historical records.
-
-## License
-
-[MIT License](LICENSE), Copyright (c) 2026 RXY712200. Third-party projects listed in [references](docs/THIRD_PARTY_REFERENCES.md) are design references, not vendored implementations.
+Copyright (c) 2026 RXY712200. Licensed under MIT.

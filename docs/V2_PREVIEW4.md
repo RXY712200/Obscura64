@@ -1,3 +1,5 @@
+> **Historical Preview 4 development record.** For stable Obscura64 v2.0.0, see the [current V2 guide](V2_GUIDE.md) and [release notes](RELEASE_NOTES_V2.0.0.md). Future-work statements below describe the state at this historical milestone.
+
 # V2 Preview 4 — Upgrade and maintenance tooling
 
 Development version: `2.0.0-preview.4`. V1 and V2 wire formats, Provider ABI,

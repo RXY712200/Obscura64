@@ -2,10 +2,10 @@
 
 ## Supported versions
 
-The stable **1.x** release is supported. Security reports about the current
-**2.0.0-preview.5 development source** are also accepted, but that preview is
-not a stable release. Reports should identify the exact version, tag, or
-commit; this policy does not promise a response deadline.
+Stable **2.0.0** and the previous stable **1.x** release are supported for
+security reports. Identify the exact release, tag, or commit and affected
+Windows/toolchain environment. This policy does not promise a response deadline.
+Pre-release tags remain available as immutable historical checkpoints.
 
 ## Reporting a vulnerability
 

@@ -1,71 +1,54 @@
-# V2 release candidate checklist
+# Obscura64 v2.0.0 — release validation record
 
-This checklist records Preview 5 validation. Complete entries only after the
-named command or CI run succeeds. Independent review, Preview 5 tag, and stable
-v2.0.0 publication are separate later gates.
+This document records **pre-publication** V2 review/validation evidence.
+The public [v2.0.0 GitHub Release](https://github.com/RXY712200/Obscura64/releases/tag/v2.0.0)
+and annotated stable tag are the authoritative proof of actual publication.
+Publication is conditional on **fresh successful Windows CI for the stable
+release commit**, not merely this checked-in document.
 
-## Compatibility
+## Product and compatibility
 
-- [x] Approved Preview 1–4 tags verified at immutable target commits.
-- [x] Frozen V1 Profile Library is 262144 bytes and matches its canonical SHA.
-- [x] V1 State, History, Managed Payload, Provider ABI, and known vectors pass.
-- [x] V2 envelope, Casual, and CurrentUser inner-record fixtures pass unchanged.
+- [x] All five planned Previews passed independent review: [Preview 5 PASS](https://github.com/RXY712200/Obscura64/issues/2#issuecomment-6075448935).
+- [x] Preview 1–4 annotated tags verified at unchanged approved commits.
+- [x] Frozen V1 library 262144 bytes, SHA-256 `8842cc4aa32bcb300937835f72aaacfd088568d1bfecd01811603c4f16e7280a`.
+- [x] V1 State/History/Managed Payload, 4096 Profiles, Provider ABI 1 and deterministic vectors retained.
+- [x] V2 envelope/Casual/CurrentUser inner-record fixtures unchanged.
+- [x] V2 scope frozen; no further protection kinds or storage products introduced.
 
-## Toolchains and integration
+## Actual Windows toolchains and distribution evidence
 
-- [x] GCC i686 strict C11 formal suite and direct C/C++ consumers pass.
-- [x] GCC x64 strict C11 formal suite and direct C/C++ consumers pass.
-- [x] MSVC x64 and Win32 CMake builds and complete CTest suites pass.
-- [x] Clang x64 CMake build and complete CTest suite pass.
-- [x] `BUILD_TESTING=OFF` builds only selected production targets.
-- [x] Installed package resolves via `find_package` for external C and C++11 consumers.
-- [x] GitHub Actions Windows workflow completes successfully.
+- [x] MinGW GCC 10.2.0 i686, GCC 16.2.0 x64: CMake/CTest 35/35 and strict C11 direct 35/35 each, zero GCC compile warnings.
+- [x] MSVC 19.51.36260.0: CMake/CTest 35/35 on x64 and Win32.
+- [x] clang-cl 19.1.5 x64: hosted Windows CI 35/35.
+- [x] Installed static-library `find_package(Obscura64 CONFIG REQUIRED)` C and C++11 consumers 2/2 on MSVC x64/Win32.
+- [x] `BUILD_TESTING=OFF` excludes formal tests and active fault hooks.
+- [x] Windows CI on Preview-5 head [run 37733067399](https://github.com/RXY712200/Obscura64/actions/runs/37733067399) passed at `1e621e37171e9ce195b83c300ccbf7115145116d`.
+- [x] Release automation gates the stable tag and public GitHub Release on a new successful `Windows V2` run for the stable-source commit.
 
-## Hardening and release review
+## Hardening and limitations
 
-- [x] Path alias tests, deterministic mutation test, CLI and crash regressions pass.
-- [x] Practical sanitizer and static-analysis results are reviewed.
-- [x] V2 guide, README, SECURITY, CONTRIBUTING, and status strings are audited.
-- [x] No frozen artifact, V1/V2 wire format, or published tag changes.
-- [x] Diff, secret/build-artifact scan, and `git diff --check` pass.
-- [ ] Independent V2 Preview 5 review passes before any Preview 5 tag.
-- [ ] Stable release validation and publication are performed separately.
+- [x] V1/V2 crash/fault tests, legacy recovery, upgrade and CLI regressions included.
+- [x] Multi-hard-link target rejection tested; path/Unicode checks passed.
+- [x] MSVC x64 selected AddressSanitizer path/mutation/threading/envelope tests 4/4.
+- [x] 100,000 deterministic parser mutations per mutation run.
+- [x] MSVC `/analyze` completed: one uninitialized-local warning fixed; two C6386 bounded-write findings assessed as false positives (not independently re-executed).
+- [x] Canonical V2 guide, README, security and contributor docs consolidated.
 
-## Local evidence
+The following are explicitly **not represented as completed coverage**:
 
-- CMake 4.3.1-msvc1; MSVC 19.51.36260.0, Visual Studio 18 2026 generator,
-  Release x64 and Win32: 35/35 CTest each. MinGW GCC 16.2.0 x64 and 10.2.0
-  i686, Ninja Release: 35/35 CTest each, zero GCC warnings. The additional
-  test runs six workers through independent V2 protection and a shared V1
-  context concurrently. Manual GCC C11 `-Wall -Wextra -Wpedantic` suites:
-  35/35 per architecture, zero warnings.
-- External installed-package C and C++11 consumers: 2/2 on MSVC x64 and
-  Win32. Direct-source C/C++11 consumers: both pass on GCC i686 and x64.
-- MSVC x64 AddressSanitizer: 4/4 selected path/mutation/threading/envelope
-  tests. The deterministic mutation suite exercises 100,000 parser mutations
-  per run.
-- MSVC `/analyze` covered the production library. Three diagnostics from the
-  first pass included an uninitialized-local warning fixed in Preview 5 and
-  two C6386 reports on mathematically bounded allocations/writes; the latter
-  were reviewed as analyzer false positives. No sanitizer finding remains.
-- Local 8.3 short-name and symlink creation were unavailable and explicitly
-  skipped; hard-link rejection was exercised. No local Clang compiler was
-  found. GitHub Actions supplied clang-cl 19.1.5 on Windows Server 2022.
-- Under simultaneous test runs, one MSVC x64 file-locking test and one GCC
-  i686 persistence test failed while removing their temporary directories.
-  Both passed in isolated reruns; the complete serial CTest and strict GCC
-  suites then passed. This cleanup sensitivity remains for independent review.
-- [GitHub Actions run 37631242883](https://github.com/RXY712200/Obscura64/actions/runs/37631242883)
-  passed on commit `9b6620ccd4380606d3c2466db0b2712741553b09`:
-  MSVC x64 34/34 plus installed consumers 2/2, MSVC Win32 34/34, and
-  clang-cl x64 34/34. Production Clang objects had no diagnostics. The Clang
-  full suite emitted 178 CRT deprecation warnings in legacy tests/tools
-  (`fopen`, `wcscpy` and similar); these are not suppressed and remain for
-  independent review. `clang-cl /W4` is used as Clang's documented equivalent
-  of `-Wall -Wextra`; `/Wall` would enable `-Weverything` on this driver.
-- [Final code CI run 37732895800](https://github.com/RXY712200/Obscura64/actions/runs/37732895800)
-  passed on commit `8ef16de4de4c4c4e5fe2bddc9c8f7c29849dec7b`:
-  MSVC x64 35/35 plus installed C/C++11 consumers 2/2, MSVC Win32 35/35,
-  and clang-cl x64 35/35. All three jobs built the production sources with
-  zero compiler warnings or errors. Existing tests/tools emitted 187 MSVC
-  x64, 187 MSVC Win32, and 178 clang-cl warnings; these remain visible.
+- Local 8.3 and symbolic-link creation were unavailable and those tests were skipped.
+- MSVC and clang-cl production library source was warning-clean in Preview-5 CI, but tests/tools still emitted 187/187/178 CRT deprecation and related warnings without suppression.
+- Two temporary-directory cleanup checks failed under simultaneous test runs but passed when rerun independently; the serial suites and final CI passed.
+- No libFuzzer or whole-library exhaustive sanitizer coverage is claimed.
+- Sidecar locks require cooperating processes. CURRENT_USER uses Windows DPAPI, and no arbitrary hardware-power-loss guarantee is offered.
+
+## Publication boundary
+
+The release workflow on `main` verifies the existing Preview tags and
+versions, waits for a successful `Windows V2` test run at the actual stable
+release commit, then publishes annotated `v2.0.0-preview.5` at the approved
+Preview-5 checkpoint and annotated stable `v2.0.0` at the stable source
+commit. GitHub Releases is the authoritative publication record.
+
+Historical V1 verification is recorded separately in
+[RELEASE_CHECKLIST_V1.md](RELEASE_CHECKLIST_V1.md).

@@ -1,3 +1,5 @@
+> **Historical Preview 2 development record.** For stable Obscura64 v2.0.0, see the [current V2 guide](V2_GUIDE.md) and [release notes](RELEASE_NOTES_V2.0.0.md). Future-work statements below describe the state at this historical milestone.
+
 # Obscura64 2.0.0-preview.2 — Protection and legacy
 
 Preview 2 makes the self-describing V2 envelope usable without a V1 project.
